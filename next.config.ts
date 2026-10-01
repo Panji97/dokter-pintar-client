@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Izinkan akses dev (HMR) dari browser HP di jaringan lokal.
+  allowedDevOrigins: ['192.168.18.220'],
 };
 
 export default nextConfig;
