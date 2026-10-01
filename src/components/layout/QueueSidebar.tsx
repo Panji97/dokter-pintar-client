@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ClipboardPlus } from 'lucide-react';
+import { useShell } from './AppShell';
 import { useClinicStore, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 
 /**
@@ -14,6 +15,13 @@ import { useClinicStore, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 export function QueueSidebar() {
   const router = useRouter();
   const { state } = useClinicStore();
+  const { setQueueSheetOpen } = useShell();
+
+  const openEmr = (regId: string) => {
+    // Di mobile/tablet rightbar tampil sebagai drawer — tutup otomatis setelah memilih.
+    setQueueSheetOpen(false);
+    router.push(`/rekam-medis/${regId}`);
+  };
 
   // Diisi setelah mount agar HTML server & hidrasi klien pertama identik.
   // new Date() saat render menghasilkan daftar berbeda (hydration mismatch).
@@ -67,7 +75,7 @@ export function QueueSidebar() {
             {shownRegs.map((r) => (
               <button
                 key={r.id}
-                onClick={() => router.push(`/rekam-medis/${r.id}`)}
+                onClick={() => openEmr(r.id)}
                 className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition"
               >
                 <div className="w-8 h-8 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center text-[11px] font-bold shrink-0">

@@ -48,7 +48,57 @@ interface ClinicState {
   schedules: StaffSchedule[];
 }
 
-const INITIAL_STATE: ClinicState = {
+/** Semua nama pasien & dokter selalu huruf kapital (UPPERCASE). */
+export const toUpperCase = (s: string) => s.toUpperCase();
+
+/** Normalisasi semua field nama orang di state (pasien, dokter, PPA). */
+function normalizeNames(s: ClinicState): ClinicState {
+  return {
+    ...s,
+    patients: s.patients.map((p) => ({ ...p, name: toUpperCase(p.name) })),
+    registrations: s.registrations.map((r) => ({
+      ...r,
+      patientName: toUpperCase(r.patientName),
+      doctor: toUpperCase(r.doctor),
+    })),
+    bookings: s.bookings.map((b) => ({
+      ...b,
+      patientName: toUpperCase(b.patientName),
+      doctor: toUpperCase(b.doctor),
+    })),
+    invoices: s.invoices.map((i) => ({
+      ...i,
+      patientName: toUpperCase(i.patientName),
+      doctor: toUpperCase(i.doctor),
+    })),
+    apotekInvoices: s.apotekInvoices.map((a) => ({
+      ...a,
+      patientName: toUpperCase(a.patientName),
+    })),
+    claims: s.claims.map((c) => ({ ...c, patientName: toUpperCase(c.patientName) })),
+    letters: s.letters.map((l) => ({
+      ...l,
+      patientName: toUpperCase(l.patientName),
+      doctor: toUpperCase(l.doctor),
+    })),
+    referrals: s.referrals.map((r) => ({
+      ...r,
+      patientName: toUpperCase(r.patientName),
+      doctor: toUpperCase(r.doctor),
+    })),
+    packages: s.packages.map((p) => ({ ...p, patientName: toUpperCase(p.patientName) })),
+    staff: s.staff.map((x) => ({ ...x, name: toUpperCase(x.name) })),
+    schedules: s.schedules.map((x) => ({ ...x, staffName: toUpperCase(x.staffName) })),
+    emr: Object.fromEntries(
+      Object.entries(s.emr).map(([k, doc]) => [
+        k,
+        { ...doc, cppt: doc.cppt.map((c) => ({ ...c, ppa: toUpperCase(c.ppa) })) },
+      ]),
+    ) as ClinicState['emr'],
+  };
+}
+
+const INITIAL_STATE: ClinicState = normalizeNames({
   patients: INITIAL_PATIENTS,
   registrations: INITIAL_REGISTRATIONS,
   bookings: INITIAL_BOOKINGS,
@@ -72,7 +122,7 @@ const INITIAL_STATE: ClinicState = {
   discounts: INITIAL_DISCOUNTS,
   staff: INITIAL_STAFF,
   schedules: INITIAL_SCHEDULES,
-};
+});
 
 function loadState(): ClinicState {
   if (typeof window === 'undefined') return INITIAL_STATE;
@@ -80,7 +130,8 @@ function loadState(): ClinicState {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return INITIAL_STATE;
     const parsed = JSON.parse(raw) as Partial<ClinicState>;
-    return { ...INITIAL_STATE, ...parsed };
+    // Normalisasi juga data lama yang masih menyimpan nama huruf kecil.
+    return normalizeNames({ ...INITIAL_STATE, ...parsed });
   } catch {
     return INITIAL_STATE;
   }
@@ -137,6 +188,8 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     const { regDate, ...rest } = reg;
     const created: Registration = {
       ...rest,
+      patientName: toUpperCase(rest.patientName),
+      doctor: toUpperCase(rest.doctor),
       id: uid('reg'),
       regDate: regDate ?? new Date().toISOString(),
       status: 'Registrasi',
@@ -148,6 +201,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   const addPatient = useCallback<ClinicStoreContextValue['addPatient']>((p) => {
     const patient: Patient = {
       ...p,
+      name: toUpperCase(p.name),
       id: uid('p'),
       registeredAt: new Date().toISOString().slice(0, 10),
     };
@@ -179,13 +233,19 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   const updateEmr = useCallback<ClinicStoreContextValue['updateEmr']>((regId, doc) => {
     setState((s) => ({
       ...s,
-      emr: { ...s.emr, [regId]: doc },
+      emr: {
+        ...s.emr,
+        [regId]: {
+          ...doc,
+          cppt: doc.cppt.map((c) => ({ ...c, ppa: toUpperCase(c.ppa) })),
+        },
+      },
       registrations: s.registrations.map((r) => (r.id === regId ? { ...r, status: 'Proses' } : r)),
     }));
   }, []);
 
   const addInvoice = useCallback<ClinicStoreContextValue['addInvoice']>((inv) => {
-    const created: Invoice = { ...inv, id: uid('inv') };
+    const created: Invoice = { ...inv, patientName: toUpperCase(inv.patientName), doctor: toUpperCase(inv.doctor), id: uid('inv') };
     setState((s) => ({ ...s, invoices: [created, ...s.invoices] }));
     return created;
   }, []);
@@ -209,11 +269,11 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const addApotekInvoice = useCallback<ClinicStoreContextValue['addApotekInvoice']>((inv) => {
-    setState((s) => ({ ...s, apotekInvoices: [{ ...inv, id: uid('ap') }, ...s.apotekInvoices] }));
+    setState((s) => ({ ...s, apotekInvoices: [{ ...inv, patientName: toUpperCase(inv.patientName), id: uid('ap') }, ...s.apotekInvoices] }));
   }, []);
 
   const addBooking = useCallback<ClinicStoreContextValue['addBooking']>((bk) => {
-    setState((s) => ({ ...s, bookings: [{ ...bk, id: uid('bk'), createdAt: new Date().toISOString() }, ...s.bookings] }));
+    setState((s) => ({ ...s, bookings: [{ ...bk, patientName: toUpperCase(bk.patientName), doctor: toUpperCase(bk.doctor), id: uid('bk'), createdAt: new Date().toISOString() }, ...s.bookings] }));
   }, []);
 
   const updateBookingStatus = useCallback<ClinicStoreContextValue['updateBookingStatus']>((id, status) => {
@@ -221,11 +281,11 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const addLetter = useCallback<ClinicStoreContextValue['addLetter']>((l) => {
-    setState((s) => ({ ...s, letters: [{ ...l, id: uid('ltr') }, ...s.letters] }));
+    setState((s) => ({ ...s, letters: [{ ...l, patientName: toUpperCase(l.patientName), doctor: toUpperCase(l.doctor), id: uid('ltr') }, ...s.letters] }));
   }, []);
 
   const addReferral = useCallback<ClinicStoreContextValue['addReferral']>((r) => {
-    setState((s) => ({ ...s, referrals: [{ ...r, id: uid('ref') }, ...s.referrals] }));
+    setState((s) => ({ ...s, referrals: [{ ...r, patientName: toUpperCase(r.patientName), doctor: toUpperCase(r.doctor), id: uid('ref') }, ...s.referrals] }));
   }, []);
 
   const updateMedicineStock = useCallback<ClinicStoreContextValue['updateMedicineStock']>((id, delta) => {
@@ -252,7 +312,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const addStaff = useCallback<ClinicStoreContextValue['addStaff']>((st) => {
-    setState((s) => ({ ...s, staff: [...s.staff, { ...st, id: uid('stf') }] }));
+    setState((s) => ({ ...s, staff: [...s.staff, { ...st, name: toUpperCase(st.name), id: uid('stf') }] }));
   }, []);
 
   const toggleStaffActive = useCallback<ClinicStoreContextValue['toggleStaffActive']>((id) => {

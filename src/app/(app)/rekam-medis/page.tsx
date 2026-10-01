@@ -3,42 +3,52 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
-import { useClinicStore, fmtDateTime } from '@/lib/ClinicStore';
-import { Search, FileHeart, ClipboardPlus, FileText, Clock } from 'lucide-react';
+import { useClinicStore, fmtDate } from '@/lib/ClinicStore';
+import { Search, FileHeart, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import type { Registration } from '@/types/clinic';
 
 export default function RekamMedisPage() {
   const { state } = useClinicStore();
-  const [tab, setTab] = useState<'hari-ini' | 'tertunda'>('hari-ini');
   const [search, setSearch] = useState('');
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-
-  const hariIni = useMemo(
-    () =>
-      state.registrations.filter((r) => r.regDate.slice(0, 10) === todayStr).filter((r) => {
-        const q = search.toLowerCase();
-        return r.patientName.toLowerCase().includes(q);
-      }),
-    [state.registrations, search, todayStr]
-  );
-
-  const tertunda = useMemo(
-    () =>
-      state.registrations
-        .filter((r) => r.regDate.slice(0, 10) !== todayStr)
-        .filter((r) => {
+  // Master pasien lama + registrasi terakhir tiap pasien
+  // (tanggal, dokter pemeriksa, poli), urut kunjungan terbaru.
+  const list = useMemo(
+    () => {
+      const lastByPatient = new Map<string, Registration>();
+      [...state.registrations]
+        .sort((a, b) => b.regDate.localeCompare(a.regDate))
+        .forEach((r) => {
+          if (!lastByPatient.has(r.patientId)) lastByPatient.set(r.patientId, r);
+        });
+      return state.patients
+        .filter((p) => {
           const q = search.toLowerCase();
-          return r.patientName.toLowerCase().includes(q);
-        }),
-    [state.registrations, search, todayStr]
+          return p.name.toLowerCase().includes(q) || p.nik.includes(search);
+        })
+        .map((p) => ({ patient: p, lastReg: lastByPatient.get(p.id) ?? null }))
+        .sort((a, b) =>
+          (b.lastReg?.regDate ?? '').localeCompare(a.lastReg?.regDate ?? '')
+        );
+    },
+    [state.patients, state.registrations, search]
   );
+
+  // Pagination: 4 data per halaman
+  const PAGE_SIZE = 4;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedList = list.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const rangeStart = list.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(safePage * PAGE_SIZE, list.length);
 
   return (
     <>
       <Topbar title="Rekam Medis" subtitle="Cari pasien dan buka rekam medis elektronik (SOAP + Odontogram)" />
       <main className="flex-1 p-4 md:p-6 space-y-5">
         {/* Cari Pasien */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 shadow-sm flex flex-wrap items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center">
             <Search className="w-6 h-6 text-teal-600" />
           </div>
@@ -50,7 +60,10 @@ export default function RekamMedisPage() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Cari nama pasien"
               className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400"
             />
@@ -59,96 +72,130 @@ export default function RekamMedisPage() {
 
         {/* Daftar Pasien Registrasi */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Daftar Pasien Registrasi</h2>
+          <div className="px-4 md:px-5 py-4 border-b border-slate-100">
+            <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Daftar Pasien</h2>
           </div>
-          <div className="px-5 pt-4 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex gap-1 overflow-x-auto sm:grid sm:grid-cols-2 sm:overflow-visible bg-slate-100 p-1.5 rounded-xl text-sm font-medium w-full flex-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {([
-                ['hari-ini', 'Hari Ini'],
-                ['tertunda', `Diagnosa Transaksi Tertunda (${tertunda.length})`],
-              ] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  className={`flex-1 sm:flex-none shrink-0 whitespace-nowrap sm:whitespace-normal px-4 py-2.5 rounded-lg transition text-center sm:w-full ${tab === key ? 'bg-teal-600 text-white shadow-md ring-1 ring-teal-600 font-semibold' : 'text-slate-500 hover:text-slate-800 hover:bg-white/70'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <Link
-              href="/registrasi"
-              className="inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-xl transition shrink-0 w-full sm:w-auto"
-            >
-              <ClipboardPlus className="w-3.5 h-3.5" />
-              Mulai Registrasi
-            </Link>
-          </div>
-
-          <div className="p-5">
-            {(tab === 'hari-ini' ? hariIni : tertunda).length === 0 ? (
+          {list.length === 0 ? (
+            <div className="p-4 md:p-5">
               <div className="py-12 text-center">
                 <FileHeart className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                 <h3 className="font-bold text-slate-700 text-sm">
-                  {tab === 'hari-ini' ? 'Daftar Pasien Registrasi Hari Ini Belum Tersedia' : 'Tidak Ada Transaksi Tertunda'}
+                  Daftar Pasien Belum Tersedia
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  {tab === 'hari-ini'
-                    ? 'Silahkan lakukan registrasi pasien terlebih dahulu dan daftar pasien secara otomatis akan muncul'
-                    : 'Registrasi dari hari-hari sebelumnya akan muncul di sini.'}
+                  Tambahkan pasien baru melalui menu Registrasi
                 </p>
               </div>
-            ) : (
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
-                    <th className="px-4 py-3 font-semibold">Tgl. Registrasi</th>
-                    <th className="px-4 py-3 font-semibold">Nama Pasien</th>
-                    <th className="px-4 py-3 font-semibold">Dokter Pemeriksa</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {(tab === 'hari-ini' ? hariIni : tertunda).map((r) => {
-                    const { date } = fmtDateTime(r.regDate);
-                    return (
-                      <tr key={r.id} className="hover:bg-slate-50 transition">
-                        <td className="px-4 py-3 text-xs text-slate-600">{date}</td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">{r.patientName}</div>
-                          <div className="text-[11px] text-slate-400">{r.group}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-slate-700">{r.doctor}</div>
-                          <div className="text-[11px] text-slate-400">{r.serviceType}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                              r.status === 'Proses' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {r.status}
+            </div>
+          ) : (
+              <>
+                {/* Header kolom (desktop) */}
+                <div className="hidden md:grid grid-cols-[minmax(0,1fr)_110px_minmax(0,1fr)_130px_120px] gap-3 px-5 py-2.5 bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                  <span className="pl-[52px]">Nama Pasien</span>
+                  <span>Reg. Terakhir</span>
+                  <span>Dokter Pemeriksa</span>
+                  <span>Poli</span>
+                  <span className="text-right">Aksi</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {pagedList.map(({ patient: p, lastReg }) => (
+                    <div
+                      key={p.id}
+                      className="w-full text-left px-4 md:px-5 py-3.5 transition grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_110px_minmax(0,1fr)_130px_120px] md:items-center gap-2 md:gap-3 hover:bg-slate-50"
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-slate-100 text-slate-500">
+                          {p.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-medium text-slate-800 truncate">
+                            {p.name}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
+                          <span className="block text-[11px] text-slate-400 font-mono truncate">
+                            NIK {p.nik}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="flex items-center justify-between gap-2 md:contents">
+                        <span className="md:hidden min-w-0">
+                          <span className="block text-[11px] text-slate-400 truncate">
+                            Terakhir: {lastReg ? fmtDate(lastReg.regDate) : '-'}
+                          </span>
+                          <span className="block text-[11px] text-slate-400 truncate">
+                            {lastReg ? `${lastReg.doctor} · ${lastReg.room}` : 'Belum ada kunjungan'}
+                          </span>
+                        </span>
+                        <span className="hidden md:block text-xs text-slate-600">
+                          {lastReg ? fmtDate(lastReg.regDate) : '-'}
+                        </span>
+                        <span className="hidden md:block text-xs text-slate-600 truncate">
+                          {lastReg ? lastReg.doctor : '-'}
+                        </span>
+                        <span className="hidden md:block text-xs text-slate-600 truncate">
+                          {lastReg ? lastReg.room : '-'}
+                        </span>
+                        {lastReg ? (
                           <Link
-                            href={`/rekam-medis/${r.id}`}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1.5 rounded-md transition"
+                            href={`/rekam-medis/${lastReg.id}`}
+                            className="inline-flex shrink-0 items-center justify-center gap-1 text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 active:bg-teal-100 px-2.5 py-1.5 rounded-md transition md:justify-self-end"
                           >
                             <FileText className="w-3 h-3" />
                             Rekam medis
                           </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table></div>
+                        ) : (
+                          <button
+                            disabled
+                            title="Pasien belum memiliki kunjungan"
+                            className="inline-flex shrink-0 items-center justify-center gap-1 text-xs font-medium text-teal-700 bg-teal-50 px-2.5 py-1.5 rounded-md transition md:justify-self-end disabled:opacity-40 disabled:pointer-events-none"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Rekam medis
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
-          </div>
+            {list.length > 0 && (
+              <div className="flex flex-col items-center gap-2.5 px-4 md:px-5 py-3.5 border-t border-slate-100 sm:flex-row sm:justify-between">
+                <span className="text-xs text-slate-400 text-center">
+                  Menampilkan {rangeStart}–{rangeEnd} dari {list.length} pasien
+                </span>
+                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => setPage((v) => Math.max(1, v - 1))}
+                    disabled={safePage === 1}
+                    aria-label="Halaman sebelumnya"
+                    className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition disabled:opacity-30 disabled:pointer-events-none"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setPage(n)}
+                      className={`min-w-9 h-9 px-2.5 rounded-lg text-xs font-medium transition ${
+                        n === safePage
+                          ? 'bg-teal-600 text-white shadow-sm'
+                          : 'text-slate-500 hover:bg-slate-100 active:bg-slate-200'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setPage((v) => Math.min(totalPages, v + 1))}
+                    disabled={safePage === totalPages}
+                    aria-label="Halaman berikutnya"
+                    className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition disabled:opacity-30 disabled:pointer-events-none"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
         </div>
       </main>
     </>

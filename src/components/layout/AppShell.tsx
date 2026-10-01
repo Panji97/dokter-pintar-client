@@ -114,7 +114,7 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Sheet rightbar antrean (mobile/tablet) */}
         <Sheet open={queueSheetOpen} onOpenChange={setQueueSheetOpen}>
-          <SheetContent side="right" className="w-80 max-w-[85vw] gap-0 p-4 overflow-y-auto">
+          <SheetContent side="right" className="w-80 max-w-[85vw] gap-0 p-4 overflow-y-auto" showCloseButton={false}>
             <QueueSidebar />
           </SheetContent>
         </Sheet>

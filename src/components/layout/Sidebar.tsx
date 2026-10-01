@@ -67,7 +67,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                 className={cn(
                   'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors',
                   isActive
-                    ? 'bg-teal-400 text-slate-950 shadow-[0_0_14px_rgba(45,212,191,0.5)]'
+                    ? 'bg-teal-400 text-slate-950 shadow-[0_0_14px_rgba(45,212,191,0.5)] animate-heartbeat'
                     : 'bg-white/5 text-slate-400 group-hover:bg-white/10 group-hover:text-teal-300'
                 )}
               >

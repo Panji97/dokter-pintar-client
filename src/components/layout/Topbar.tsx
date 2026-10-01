@@ -56,6 +56,13 @@ export function Topbar({ title, subtitle }: TopbarProps) {
   );
   const notifCount = pendingInvoices.length + lowStock.length + newBookings.length + pendingResep.length;
 
+  // Registrasi hari sebelumnya yang belum diproses (pengganti tab "Diagnosa Transaksi Tertunda").
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const pendingQueue = useMemo(
+    () => state.registrations.filter((r) => r.regDate.slice(0, 10) !== todayIso).length,
+    [state.registrations, todayIso]
+  );
+
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
@@ -147,9 +154,14 @@ export function Topbar({ title, subtitle }: TopbarProps) {
           onClick={() => setQueueSheetOpen(true)}
           aria-label="Tampilkan antrean pasien"
           title="Antrean pasien"
-          className="xl:hidden p-2 rounded-lg hover:bg-slate-100 transition outline-none text-slate-600"
+          className="xl:hidden relative p-2 rounded-lg hover:bg-slate-100 transition outline-none text-slate-600"
         >
           <PanelRight className="w-5 h-5" />
+          {pendingQueue > 0 && (
+            <span suppressHydrationWarning className="absolute top-1 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+              {pendingQueue > 9 ? '9+' : pendingQueue}
+            </span>
+          )}
         </button>
 
         {/* Buka/tutup rightbar antrean pasien (desktop xl+) */}
@@ -157,12 +169,20 @@ export function Topbar({ title, subtitle }: TopbarProps) {
           onClick={toggleQueue}
           aria-label={queueOpen ? 'Sembunyikan antrean pasien' : 'Tampilkan antrean pasien'}
           aria-expanded={queueOpen}
+          aria-pressed={queueOpen}
           title="Antrean pasien"
-          className={`hidden xl:inline-flex p-2 rounded-lg transition outline-none ${
-            queueOpen ? 'bg-teal-50 text-teal-700' : 'hover:bg-slate-100 text-slate-600'
+          className={`hidden xl:inline-flex relative p-2 rounded-lg transition outline-none ${
+            queueOpen
+              ? 'bg-teal-600 text-white shadow-md hover:bg-teal-700 animate-heartbeat'
+              : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <PanelRight className="w-5 h-5" />
+          {pendingQueue > 0 && (
+            <span suppressHydrationWarning className="absolute top-1 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+              {pendingQueue > 9 ? '9+' : pendingQueue}
+            </span>
+          )}
         </button>
 
         {/* Notifikasi (dropdown, pengganti rightbar) */}
