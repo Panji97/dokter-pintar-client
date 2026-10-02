@@ -47,38 +47,32 @@ export default function BillingPage() {
       <Topbar title="Billing" subtitle="Tagihan pasien, tagihan apotek, dan klaim asuransi" />
       <main className="flex-1 p-4 md:p-6 space-y-5">
         {/* Ringkasan */}
-        {/* Mobile: satu kartu ringkas 3 baris */}
-        <div className="md:hidden bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
-              <Receipt className="w-4 h-4 text-amber-500" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Belum Dibayar</div>
-              <div className="text-base font-bold text-rose-600 truncate">{fmtRupiah(totalBelum)}</div>
+        {/* Mobile: 3 ubin mini sejajar */}
+        <div className="md:hidden grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 min-w-0">
+            <div className="flex items-center gap-1 min-w-0">
+              <Receipt className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold truncate">
+                Tagihan · {state.invoices.filter((i) => i.paymentStatus === 'Belum Dibayar').length}
+              </span>
             </div>
-            <div className="text-[10px] text-slate-400 shrink-0">
-              {state.invoices.filter((i) => i.paymentStatus === 'Belum Dibayar').length} invoice
-            </div>
+            <div className="mt-1 text-[13px] font-bold text-rose-600 truncate">{fmtRupiah(totalBelum)}</div>
           </div>
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
-              <Pill className="w-4 h-4 text-teal-500" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Tagihan Apotek</div>
-              <div className="text-base font-bold text-slate-900 truncate">{state.apotekInvoices.length} tagihan</div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 min-w-0">
+            <div className="flex items-center gap-1 min-w-0">
+              <Pill className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+              <span className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold truncate">Apotek</span>
             </div>
+            <div className="mt-1 text-[13px] font-bold text-slate-900 truncate">{state.apotekInvoices.length} tagihan</div>
           </div>
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4 text-blue-500" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Klaim Asuransi</div>
-              <div className="text-base font-bold text-slate-900 truncate">{fmtRupiah(claimList.reduce((s, c) => s + c.amount, 0))}</div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 min-w-0">
+            <div className="flex items-center gap-1 min-w-0">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold truncate">
+                Klaim · {claimList.length}
+              </span>
             </div>
-            <div className="text-[10px] text-slate-400 shrink-0">{claimList.length} klaim</div>
+            <div className="mt-1 text-[13px] font-bold text-slate-900 truncate">{fmtRupiah(claimList.reduce((s, c) => s + c.amount, 0))}</div>
           </div>
         </div>
         {/* Desktop: 3 kartu */}
