@@ -111,24 +111,24 @@ export default function LaporanPage() {
         {/* ======== LAPORAN REKAM MEDIS ======== */}
         {tab === 'rekam-medis' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2">
                   <FileText className="w-4 h-4 text-teal-500" />
-                  <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">RME Dibuat</span>
+                  <span className="text-[9px] md:text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">RME Dibuat</span>
                 </div>
-                <div className="text-2xl font-bold text-slate-900">{Object.keys(state.emr).length}</div>
-                <div className="text-xs text-slate-400 mt-1">{category}</div>
+                <div className="text-[13px] md:text-2xl font-bold text-slate-900">{Object.keys(state.emr).length}</div>
+                <div className="text-xs text-slate-400 mt-1 hidden md:block">{category}</div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2">
                   <Users className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Registrasi</span>
+                  <span className="text-[9px] md:text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">Registrasi</span>
                 </div>
-                <div className="text-2xl font-bold text-slate-900">{stats.regs.length}</div>
-                <div className="text-xs text-slate-400 mt-1">Periode terpilih</div>
+                <div className="text-[13px] md:text-2xl font-bold text-slate-900">{stats.regs.length}</div>
+                <div className="text-xs text-slate-400 mt-1 hidden md:block">Periode terpilih</div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm md:col-span-2">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm col-span-2 md:col-span-2">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Diagnosa Terbanyak</h3>
                 {stats.topDiag.length === 0 ? (
                   <p className="text-xs text-slate-400">Belum ada data diagnosa pada periode ini.</p>
@@ -146,7 +146,29 @@ export default function LaporanPage() {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              {/* Mobile: kartu RME */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {stats.regs.map((r) => {
+                  const emr = state.emr[r.id];
+                  return (
+                    <div key={r.id} className="px-4 py-3.5 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-medium text-slate-800 truncate">{r.patientName}</div>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${emr ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {emr ? 'Proses' : 'Registrasi'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate">{fmtDate(r.regDate)} · {r.doctor}</div>
+                      <div className="text-[11px] text-slate-500 truncate">Dx: {emr?.diagnosa.map((d) => d.icd10Code).join(', ') || '—'}</div>
+                    </div>
+                  );
+                })}
+                {stats.regs.length === 0 && (
+                  <p className="px-4 py-10 text-center text-xs text-slate-400">Tidak ada registrasi pada periode ini.</p>
+                )}
+              </div>
+              {/* Desktop: tabel */}
+              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3 font-semibold">Tgl. Registrasi</th>
@@ -185,22 +207,22 @@ export default function LaporanPage() {
         {/* ======== LAPORAN KUNJUNGAN ======== */}
         {tab === 'kunjungan' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2">
                   <Activity className="w-4 h-4 text-teal-500" />
-                  <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Total Kunjungan</span>
+                  <span className="text-[9px] md:text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">Total Kunjungan</span>
                 </div>
-                <div className="text-2xl font-bold text-slate-900">{stats.regs.length}</div>
+                <div className="text-[13px] md:text-2xl font-bold text-slate-900">{stats.regs.length}</div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2">
                   <Users className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Pasien Unik</span>
+                  <span className="text-[9px] md:text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">Pasien Unik</span>
                 </div>
-                <div className="text-2xl font-bold text-slate-900">{new Set(stats.regs.map((r) => r.patientId)).size}</div>
+                <div className="text-[13px] md:text-2xl font-bold text-slate-900">{new Set(stats.regs.map((r) => r.patientId)).size}</div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm md:col-span-2">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm col-span-2 md:col-span-2">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Kunjungan per Dokter</h3>
                 {Object.entries(stats.kunjunganPerDokter).length === 0 ? (
                   <p className="text-xs text-slate-400">Belum ada kunjungan.</p>
@@ -218,7 +240,21 @@ export default function LaporanPage() {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              {/* Mobile: kartu kunjungan */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {stats.regs.map((r) => (
+                  <div key={r.id} className="px-4 py-3.5 space-y-1">
+                    <div className="text-sm font-medium text-slate-800 truncate">{r.patientName}</div>
+                    <div className="text-[11px] text-slate-400 truncate">{fmtDate(r.regDate)} · {r.group}</div>
+                    <div className="text-[11px] text-slate-500 truncate">{r.room} · {r.doctor}</div>
+                  </div>
+                ))}
+                {stats.regs.length === 0 && (
+                  <p className="px-4 py-10 text-center text-xs text-slate-400">Tidak ada kunjungan pada periode ini.</p>
+                )}
+              </div>
+              {/* Desktop: tabel */}
+              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3 font-semibold">Tgl.</th>
@@ -250,27 +286,33 @@ export default function LaporanPage() {
         {/* ======== LAPORAN TRANSAKSI ======== */}
         {tab === 'transaksi' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Pendapatan Periode</span>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm min-w-0">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span className="text-[9px] md:text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">
+                    <span className="md:hidden">Pendapatan</span>
+                    <span className="hidden md:inline">Pendapatan Periode</span>
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-slate-900">{fmtRupiah(stats.revenue)}</div>
-                <div className="text-xs text-emerald-600 mt-1 font-medium">Lunas: {fmtRupiah(stats.lunas)}</div>
+                <div className="text-[13px] md:text-2xl font-bold text-slate-900 truncate">{fmtRupiah(stats.revenue)}</div>
+                <div className="text-[11px] md:text-xs text-emerald-600 mt-0.5 md:mt-1 font-medium truncate">Lunas: {fmtRupiah(stats.lunas)}</div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Receipt className="w-4 h-4 text-amber-500" />
-                  <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Pendapatan Apotek</span>
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm min-w-0">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2">
+                  <Receipt className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span className="text-[9px] md:text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">
+                    <span className="md:hidden">Apotek</span>
+                    <span className="hidden md:inline">Pendapatan Apotek</span>
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-slate-900">{fmtRupiah(stats.apotek)}</div>
-                <div className="text-xs text-slate-400 mt-1">Obat bebas & resep</div>
+                <div className="text-[13px] md:text-2xl font-bold text-slate-900 truncate">{fmtRupiah(stats.apotek)}</div>
+                <div className="text-[11px] md:text-xs text-slate-400 mt-0.5 md:mt-1 truncate">Obat bebas & resep</div>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="bg-white rounded-xl border border-slate-200 p-2.5 md:p-5 shadow-sm col-span-2 md:col-span-1">
+                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2">
                   <Pill className="w-4 h-4 text-teal-500" />
-                  <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Obat Terbanyak</span>
+                  <span className="text-[9px] md:text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">Obat Terbanyak</span>
                 </div>
                 {stats.topMed.length === 0 ? (
                   <p className="text-xs text-slate-400">Belum ada data.</p>
@@ -288,7 +330,29 @@ export default function LaporanPage() {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              {/* Mobile: kartu transaksi */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {stats.invoices.map((i) => (
+                  <div key={i.id} className="px-4 py-3.5 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium text-slate-800 truncate">{i.patientName}</div>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${i.paymentStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {i.paymentStatus}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400">{fmtDate(i.date)}</div>
+                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                      <span className="text-[10px] text-slate-400 truncate">Konsul · Tindakan · Alkes · Obat</span>
+                      <span className="font-bold text-slate-800 text-sm shrink-0">{fmtRupiah(i.total)}</span>
+                    </div>
+                  </div>
+                ))}
+                {stats.invoices.length === 0 && (
+                  <p className="px-4 py-10 text-center text-xs text-slate-400">Tidak ada transaksi pada periode ini.</p>
+                )}
+              </div>
+              {/* Desktop: tabel */}
+              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3 font-semibold">Tanggal</th>

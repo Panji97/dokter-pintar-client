@@ -89,7 +89,7 @@ export default function PengaturanPage() {
             {/* Pelayanan */}
             {sysTab === 'pelayanan' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full">
+                <div className="flex md:grid md:grid-cols-4 gap-2 w-full overflow-x-auto md:overflow-visible pb-1 md:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {([
                     ['poli', 'Poli'],
                     ['pelayanan', 'Pelayanan'],
@@ -102,24 +102,39 @@ export default function PengaturanPage() {
 
                 {svcTab === 'poli' && (
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
+                    <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
                       <h2 className="font-bold text-slate-800 text-sm">Poli FasKes</h2>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 w-full sm:w-auto">
                         <input
                           value={newRoom}
                           onChange={(e) => setNewRoom(e.target.value)}
                           placeholder="Nama poli baru"
-                          className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-44"
+                          className="px-3 py-2 text-xs border border-slate-300 rounded-lg outline-none focus:border-teal-400 flex-1 sm:w-44"
                         />
                         <button
                           onClick={() => { if (newRoom.trim()) { addRoom(newRoom.trim()); setNewRoom(''); } }}
-                          className="inline-flex items-center gap-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                          className="inline-flex items-center justify-center gap-1 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-medium px-3 py-2 rounded-lg transition shrink-0"
                         >
                           <Plus className="w-3.5 h-3.5" /> Tambah
                         </button>
                       </div>
                     </div>
-                    <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                    <div className="md:hidden divide-y divide-slate-100">
+                      {state.rooms.map((r) => (
+                        <div key={r.id} className="px-4 py-3 flex items-center gap-2">
+                          <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">
+                            {r.name}
+                            {r.satusehat && (
+                              <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 align-middle">SATUSEHAT</span>
+                            )}
+                          </span>
+                          <button onClick={() => removeRoom(r.id)} aria-label="Hapus poli" className="text-rose-500 hover:text-rose-700 active:text-rose-800 p-1.5 shrink-0">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                           <th className="px-4 py-3 font-semibold">Nama Poli</th>
@@ -149,7 +164,20 @@ export default function PengaturanPage() {
 
                 {svcTab === 'pelayanan' && (
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                    <div className="md:hidden divide-y divide-slate-100">
+                      {state.services.map((sv) => (
+                        <div key={sv.id} className="px-4 py-3.5 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-medium text-slate-800 truncate">{sv.name}</div>
+                            <span className="text-sm font-bold text-slate-800 shrink-0">Rp {sv.price.toLocaleString('id-ID')}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            <span className="font-mono">{sv.code}</span> · {sv.room}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                           <th className="px-4 py-3 font-semibold">Kode</th>
@@ -174,7 +202,18 @@ export default function PengaturanPage() {
 
                 {svcTab === 'paket' && (
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                    <div className="md:hidden divide-y divide-slate-100">
+                      {state.packages.map((pk) => (
+                        <div key={pk.id} className="px-4 py-3.5 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-medium text-slate-800 truncate">{pk.name}</div>
+                            <span className="text-sm font-bold text-slate-800 shrink-0">Rp {pk.price.toLocaleString('id-ID')}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">{pk.patientName} · Sesi {pk.usedSessions}/{pk.totalSessions}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                           <th className="px-4 py-3 font-semibold">Paket</th>
@@ -199,7 +238,20 @@ export default function PengaturanPage() {
 
                 {svcTab === 'diskon' && (
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                    <div className="md:hidden divide-y divide-slate-100">
+                      {state.discounts.map((dc) => (
+                        <div key={dc.id} className="px-4 py-3.5 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-medium text-slate-800 truncate">{dc.name}</div>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${dc.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {dc.active ? 'Aktif' : 'Nonaktif'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">{dc.appliesTo} · {dc.percent}%</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                           <th className="px-4 py-3 font-semibold">Nama Diskon</th>
@@ -231,7 +283,16 @@ export default function PengaturanPage() {
             {/* Jadwal */}
             {sysTab === 'jadwal' && (
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                <div className="md:hidden divide-y divide-slate-100">
+                  {state.schedules.map((sc) => (
+                    <div key={sc.id} className="px-4 py-3.5 space-y-1">
+                      <div className="text-sm font-medium text-slate-800 truncate">{sc.staffName}</div>
+                      <div className="text-[11px] text-slate-400 truncate">{sc.day} · {sc.startTime} – {sc.endTime}</div>
+                      <div className="text-[11px] text-slate-500 truncate">{sc.room}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-3 font-semibold">Pegawai</th>
@@ -257,22 +318,44 @@ export default function PengaturanPage() {
             {/* Pegawai */}
             {sysTab === 'pegawai' && (
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div className="px-4 md:px-5 py-4 border-b border-slate-100 space-y-2">
                   <h2 className="font-bold text-slate-800 text-sm">Pegawai</h2>
-                  <div className="flex gap-2">
-                    <input value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} placeholder="Nama pegawai" className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-40" />
-                    <select value={newStaff.role} onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value as never })} className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white">
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+                    <input value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} placeholder="Nama pegawai" className="px-3 py-2 text-xs border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-full" />
+                    <select value={newStaff.role} onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value as never })} className="px-2 py-2 text-xs border border-slate-300 rounded-lg bg-white">
                       {['Dokter Gigi', 'Dokter Umum', 'Perawat', 'Apoteker', 'Kasir', 'Admin'].map((r) => <option key={r}>{r}</option>)}
                     </select>
                     <button
                       onClick={() => { if (newStaff.name.trim()) { addStaff({ ...newStaff, name: newStaff.name.trim(), active: true }); setNewStaff({ name: '', role: 'Dokter Gigi', room: 'Poli Gigi 1' }); } }}
-                      className="inline-flex items-center gap-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                      className="inline-flex items-center justify-center gap-1 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-medium px-3 py-2 rounded-lg transition"
                     >
                       <UserPlus className="w-3.5 h-3.5" /> Tambah
                     </button>
                   </div>
                 </div>
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                <div className="md:hidden divide-y divide-slate-100">
+                  {state.staff.map((st) => (
+                    <div key={st.id} className="px-4 py-3.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-slate-800 truncate">{st.name}</div>
+                          {st.sip && <div className="text-[11px] text-slate-400 truncate">{st.sip}</div>}
+                        </div>
+                        <button onClick={() => toggleStaffActive(st.id)} className="text-[11px] font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 active:bg-slate-200 px-2.5 py-2 rounded-lg transition shrink-0">
+                          {st.active ? 'Nonaktifkan' : 'Aktifkan'}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-medium">{st.role}</span>
+                        <span className="text-[11px] text-slate-400 truncate">{st.room}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {st.active ? 'Aktif' : 'Nonaktif'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-3 font-semibold">Nama</th>
@@ -312,7 +395,7 @@ export default function PengaturanPage() {
 
             {/* FasKes */}
             {sysTab === 'faskes' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm space-y-4">
                 <div>
                   <label className={labelCls}>Nama FasKes</label>
                   <input value={clinicName} onChange={(e) => setClinicName(e.target.value)} className={inputCls} />
@@ -331,7 +414,7 @@ export default function PengaturanPage() {
                     <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
                   </div>
                 </div>
-                <button onClick={flash} className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition">
+                <button onClick={flash} className="inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium px-4 py-2.5 sm:py-2 rounded-lg shadow-sm transition w-full sm:w-auto">
                   {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                   {saved ? 'Tersimpan!' : 'Simpan Perubahan'}
                 </button>
@@ -340,7 +423,7 @@ export default function PengaturanPage() {
 
             {/* Akun */}
             {sysTab === 'akun' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm space-y-4">
                 <h2 className="font-bold text-slate-800 text-sm">Akun Login FasKes</h2>
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-4 text-sm space-y-1">
                   <div className="flex justify-between"><span className="text-slate-500">Username</span><span className="font-medium text-slate-800">dokterpintar</span></div>
@@ -373,7 +456,7 @@ export default function PengaturanPage() {
             </div>
 
             {extTab === 'satusehat' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 space-y-4">
                 <h2 className="font-bold text-slate-800 text-sm flex items-center gap-2">ID SATUSEHAT</h2>
                 <p className="text-xs text-slate-500">
                   Harap lengkapi data ID SATUSEHAT, Praktisi, Organisasi dan Lokasi. Setelah melengkapi, Anda dapat
@@ -402,7 +485,7 @@ export default function PengaturanPage() {
                     <span key={s} className="px-3 py-1.5 bg-slate-100 rounded-full">{s} → belum dikonfigurasi</span>
                   ))}
                 </div>
-                <button onClick={flash} className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition">
+                <button onClick={flash} className="inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium px-4 py-2.5 sm:py-2 rounded-lg shadow-sm transition w-full sm:w-auto">
                   {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                   {saved ? 'Tersimpan!' : 'Simpan Kredensial'}
                 </button>
@@ -410,7 +493,7 @@ export default function PengaturanPage() {
             )}
 
             {extTab === 'bpjs' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 space-y-4">
                 <h2 className="font-bold text-slate-800 text-sm">BPJS Kesehatan (PCare / iCare / Mobile JKN)</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
@@ -430,7 +513,7 @@ export default function PengaturanPage() {
                     <input placeholder="cth. FASKES GIGI PERMATA" className={inputCls} />
                   </div>
                 </div>
-                <button onClick={flash} className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition">
+                <button onClick={flash} className="inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium px-4 py-2.5 sm:py-2 rounded-lg shadow-sm transition w-full sm:w-auto">
                   {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                   {saved ? 'Tersimpan!' : 'Simpan Kredensial'}
                 </button>
@@ -438,7 +521,7 @@ export default function PengaturanPage() {
             )}
 
             {extTab === 'fonnte' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 space-y-4">
                 <h2 className="font-bold text-slate-800 text-sm">Fonnte (Notifikasi WhatsApp)</h2>
                 <p className="text-xs text-slate-500">
                   Hubungkan Fonnte untuk mengirim notifikasi booking, reminder kunjungan, dan ucapan ulang tahun
@@ -448,7 +531,7 @@ export default function PengaturanPage() {
                   <label className={labelCls}>Fonnte Device Token</label>
                   <input type="password" placeholder="Token perangkat Fonnte" className={inputCls} />
                 </div>
-                <button onClick={flash} className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition">
+                <button onClick={flash} className="inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium px-4 py-2.5 sm:py-2 rounded-lg shadow-sm transition w-full sm:w-auto">
                   {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                   {saved ? 'Tersimpan!' : 'Hubungkan Fonnte'}
                 </button>

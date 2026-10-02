@@ -44,13 +44,11 @@ function DashboardFasKes() {
   const kunjunganHariIni = state.registrations.filter(
     (r) => Date.now() - new Date(r.regDate).getTime() < 24 * 60 * 60 * 1000
   ).length;
-  const bookingMenunggu = state.bookings.filter((b) => b.status === 'Menunggu Konfirmasi').length;
   const tagihanTertunda = state.invoices.filter((i) => i.paymentStatus === 'Belum Dibayar');
   const stokMenipis = state.medicines.filter((m) => m.stock <= m.minStock).length;
 
   const kpis = [
     { label: 'Kunjungan Hari Ini', value: String(kunjunganHariIni), accent: 'text-teal-600', href: '/registrasi' },
-    { label: 'Booking Menunggu', value: String(bookingMenunggu), accent: 'text-blue-600', href: '/booking' },
     {
       label: 'Tagihan Tertunda',
       value: fmtRupiah(tagihanTertunda.reduce((s, i) => s + i.total, 0)),
@@ -63,7 +61,7 @@ function DashboardFasKes() {
   return (
     <div className="space-y-5">
       {/* KPI live */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
         {kpis.map((k) => (
           <a
             key={k.label}

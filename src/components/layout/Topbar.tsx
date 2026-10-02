@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Search, Bell, Calendar, Menu, ReceiptText, AlertTriangle, ClipboardPlus, Pill, PanelRight } from 'lucide-react';
+import { Search, Bell, Calendar, Menu, ReceiptText, AlertTriangle, Pill, PanelRight } from 'lucide-react';
 import { useShell } from './AppShell';
 import { BrandLogo } from './BrandLogo';
 import { LogoLink } from './LogoLink';
@@ -54,15 +54,11 @@ export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
     [state.invoices]
   );
   const lowStock = useMemo(() => state.medicines.filter((m) => m.stock <= m.minStock), [state.medicines]);
-  const newBookings = useMemo(
-    () => state.bookings.filter((b) => b.status === 'Menunggu Konfirmasi'),
-    [state.bookings]
-  );
   const pendingResep = useMemo(
     () => state.registrations.filter((r) => state.emr[r.id] && state.emr[r.id].resepApotek.length > 0),
     [state.registrations, state.emr]
   );
-  const notifCount = pendingInvoices.length + lowStock.length + newBookings.length + pendingResep.length;
+  const notifCount = pendingInvoices.length + lowStock.length + pendingResep.length;
 
   // Registrasi hari sebelumnya yang belum diproses (pengganti tab "Diagnosa Transaksi Tertunda").
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -245,19 +241,6 @@ export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-slate-800 truncate">{i.patientName} — {fmtRupiah(i.total)}</span>
                   <span className="block text-[11px] text-slate-400">Belum dibayar · {i.date}</span>
-                </span>
-              </DropdownMenuItem>
-            ))}
-            {newBookings.slice(0, 2).map((b) => (
-              <DropdownMenuItem
-                key={b.id}
-                onClick={() => router.push('/booking')}
-                className="flex items-start gap-2.5 py-2 cursor-pointer"
-              >
-                <ClipboardPlus className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-slate-800 truncate">{b.patientName} menunggu konfirmasi</span>
-                  <span className="block text-[11px] text-slate-400">Booking {b.date} · {b.time}</span>
                 </span>
               </DropdownMenuItem>
             ))}

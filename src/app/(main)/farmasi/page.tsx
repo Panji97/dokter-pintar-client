@@ -92,19 +92,44 @@ export default function FarmasiPage() {
         {/* ==================== KAJIAN RESEP ==================== */}
         {tab === 'kajian' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-slate-800 text-sm">Daftar Nama Pasien</h2>
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Cari nama pasien"
-                  className="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-56"
+                  className="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-full sm:w-56"
                 />
               </div>
             </div>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            {/* Mobile: kartu kajian */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {resepList.map(({ reg, items }) => {
+                const { date, time } = { date: fmtDate(reg.regDate), time: new Date(reg.regDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) };
+                return (
+                  <div key={reg.id} className="px-4 py-3.5 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium text-slate-800 truncate">{reg.patientName}</div>
+                      <button onClick={prosesResep} className="text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 active:bg-teal-100 px-2.5 py-2 rounded-lg transition shrink-0">
+                        Proses
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-400">{date} · {time} · {reg.doctor}</div>
+                    <div className="text-[11px] text-slate-500 truncate">{items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</div>
+                    <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Belum Selesai</span>
+                  </div>
+                );
+              })}
+              {resepList.length === 0 && (
+                <p className="px-4 py-10 text-center text-xs text-slate-400">
+                  Tidak ada resep menunggu kajian. Resep masuk otomatis setelah dokter menyimpan resep di RME.
+                </p>
+              )}
+            </div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3 font-semibold">Tgl. dan Waktu</th>
@@ -157,7 +182,7 @@ export default function FarmasiPage() {
         {/* ==================== DATA MASTER ==================== */}
         {tab === 'master' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full">
+            <div className="flex md:grid md:grid-cols-4 gap-2 w-full overflow-x-auto md:overflow-visible pb-1 md:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {([
                 ['supplier', 'Supplier Farmasi'],
                 ['pabrik', 'Pabrik Farmasi'],
@@ -167,7 +192,7 @@ export default function FarmasiPage() {
                 <button
                   key={key}
                   onClick={() => setMasterTab(key)}
-                  className={`px-3 py-2.5 rounded-xl text-xs font-medium transition border w-full text-center ${
+                  className={`px-4 py-2.5 rounded-xl text-xs font-medium transition border text-center shrink-0 whitespace-nowrap md:w-full ${
                     masterTab === key ? 'bg-teal-700 text-white border-teal-700 shadow-md ring-2 ring-teal-600/25 font-semibold' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-800'
                   }`}
                 >
@@ -178,7 +203,16 @@ export default function FarmasiPage() {
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {masterTab === 'supplier' && (
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                <>
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {state.suppliers.map((s) => (
+                      <div key={s.id} className="px-4 py-3 flex items-center gap-3">
+                        <span className="font-mono text-[11px] text-slate-400 bg-slate-50 rounded-md px-2 py-1 shrink-0">{s.code}</span>
+                        <span className="text-sm text-slate-700 truncate">{s.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-3 font-semibold">Kode Supplier</th>
@@ -194,9 +228,19 @@ export default function FarmasiPage() {
                     ))}
                   </tbody>
                 </table></div>
+                </>
               )}
               {masterTab === 'pabrik' && (
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                <>
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {state.factories.map((f) => (
+                      <div key={f.id} className="px-4 py-3 flex items-center gap-3">
+                        <span className="font-mono text-[11px] text-slate-400 bg-slate-50 rounded-md px-2 py-1 shrink-0">{f.code}</span>
+                        <span className="text-sm text-slate-700 truncate">{f.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-3 font-semibold">Kode Pabrik</th>
@@ -212,9 +256,19 @@ export default function FarmasiPage() {
                     ))}
                   </tbody>
                 </table></div>
+                </>
               )}
               {masterTab === 'merek' && (
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                <>
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {state.brands.map((b) => (
+                      <div key={b.id} className="px-4 py-3 flex items-center gap-3">
+                        <span className="font-mono text-[11px] text-slate-400 bg-slate-50 rounded-md px-2 py-1 shrink-0">{b.code}</span>
+                        <span className="text-sm text-slate-700 truncate">{b.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-3 font-semibold">Kode Merek</th>
@@ -230,9 +284,24 @@ export default function FarmasiPage() {
                     ))}
                   </tbody>
                 </table></div>
+                </>
               )}
               {masterTab === 'barang' && (
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                <>
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {state.medicines.map((m) => (
+                      <div key={m.id} className="px-4 py-3.5 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-medium text-slate-800 truncate">{m.name}</div>
+                          <span className="text-sm font-bold text-slate-800 shrink-0">{fmtRupiah(m.price)}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          <span className="font-mono">{m.code}</span> · {m.category} · {m.unit}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-3 font-semibold">Kode</th>
@@ -254,6 +323,7 @@ export default function FarmasiPage() {
                     ))}
                   </tbody>
                 </table></div>
+                </>
               )}
             </div>
           </div>
@@ -262,13 +332,27 @@ export default function FarmasiPage() {
         {/* ==================== PENERIMAAN ==================== */}
         {tab === 'penerimaan' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-slate-800 text-sm">Cari Penerimaan Barang Farmasi</h2>
-              <button className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition">
+              <button className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-medium px-3 py-2.5 sm:py-2 rounded-lg transition">
                 <Plus className="w-3.5 h-3.5" /> Form Penerimaan Barang
               </button>
             </div>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            {/* Mobile: kartu penerimaan */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {state.penerimaan.map((p) => (
+                <div key={p.id} className="px-4 py-3.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-slate-800 truncate">{p.supplier}</div>
+                    <span className="font-mono text-[11px] text-slate-400 shrink-0">{p.faktur}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">{fmtDate(p.date)}</div>
+                  <div className="text-[11px] text-slate-500">{p.items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3 font-semibold">Tgl. Penerimaan</th>
@@ -294,10 +378,25 @@ export default function FarmasiPage() {
         {/* ==================== PENGELUARAN ==================== */}
         {tab === 'pengeluaran' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-100">
               <h2 className="font-bold text-slate-800 text-sm">Cari Pengeluaran Barang Farmasi</h2>
             </div>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            {/* Mobile: kartu pengeluaran */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {state.pengeluaran.map((p) => (
+                <div key={p.id} className="px-4 py-3.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-slate-800 truncate">{p.name}</div>
+                    <span className="text-sm font-bold text-slate-800 shrink-0">{p.qty} <span className="text-[10px] font-normal text-slate-400">{p.unit}</span></span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    <span className="font-mono">{p.code}</span> · {fmtDate(p.date)} · {p.room}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3 font-semibold">Tanggal</th>
@@ -356,7 +455,26 @@ export default function FarmasiPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Mobile: ubin ringkas */}
+            <div className="md:hidden grid grid-cols-3 gap-2">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 min-w-0">
+                <Boxes className="w-3.5 h-3.5 text-teal-500" />
+                <div className="mt-1 text-[13px] font-bold text-slate-900 truncate">{state.medicines.length} item</div>
+                <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold truncate">Total Stok</div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 min-w-0">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                <div className="mt-1 text-[13px] font-bold text-rose-600 truncate">{lowStock.length} item</div>
+                <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold truncate">Menipis</div>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 min-w-0">
+                <CalendarClock className="w-3.5 h-3.5 text-amber-500" />
+                <div className="mt-1 text-[13px] font-bold text-amber-600 truncate">{nearExpiry.length} item</div>
+                <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold truncate">ED ≤ 90 hr</div>
+              </div>
+            </div>
+            {/* Desktop: 3 kartu */}
+            <div className="hidden md:grid md:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <Boxes className="w-4 h-4 text-teal-500" />
@@ -386,7 +504,40 @@ export default function FarmasiPage() {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              {/* Mobile: kartu stok */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {filteredMeds.map((m) => {
+                  const daysLeft = Math.ceil((new Date(m.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <div key={m.id} className="px-4 py-3.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-medium text-slate-800 truncate">{m.name}</div>
+                        {m.stock <= m.minStock ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 shrink-0">Menipis</span>
+                        ) : daysLeft <= 90 ? (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">Kadaluarsa Dekat</span>
+                        ) : (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 shrink-0">Aman</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate">
+                        <span className="font-mono">{m.code}</span> · Batch {m.batchNumber} · ED {fmtDate(m.expiryDate)} ({daysLeft} hari)
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-sm font-bold ${m.stock <= m.minStock ? 'text-rose-600' : 'text-slate-800'}`}>
+                          {m.stock} <span className="text-[10px] font-normal text-slate-400">/ min {m.minStock} {m.unit}</span>
+                        </span>
+                        <span className="shrink-0">
+                          <button onClick={() => updateMedicineStock(m.id, -1)} aria-label="Kurangi stok" className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:bg-slate-200 text-slate-600 text-sm font-bold">−</button>
+                          <button onClick={() => updateMedicineStock(m.id, 1)} aria-label="Tambah stok" className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:bg-slate-200 text-slate-600 text-sm font-bold ml-1.5">+</button>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Desktop: tabel */}
+              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3 font-semibold">Kode</th>
@@ -440,7 +591,7 @@ export default function FarmasiPage() {
         {/* ==================== PENYESUAIAN ==================== */}
         {tab === 'penyesuaian' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-slate-800 text-sm">Cari Penyesuaian Barang Farmasi</h2>
               <button
                 onClick={() => {
@@ -453,12 +604,31 @@ export default function FarmasiPage() {
                     items: [{ id: med.id, code: med.code, name: med.name, stockBefore: med.stock, stockAfter: med.stock, reason: 'Opname rutin' }],
                   });
                 }}
-                className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition"
+                className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-medium px-3 py-2.5 sm:py-2 rounded-lg transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Form Penyesuaian
               </button>
             </div>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            {/* Mobile: kartu penyesuaian */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {state.penyesuaian.map((a) => (
+                <div key={a.id} className="px-4 py-3.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-slate-800 truncate">{a.nota}</div>
+                    <div className="text-[11px] text-slate-400 shrink-0">{fmtDate(a.date)}</div>
+                  </div>
+                  <div className="text-[11px] text-slate-400">PJ: {a.pic}</div>
+                  <div className="text-[11px] text-slate-500">
+                    {a.items.map((i) => `${i.name}: ${i.stockBefore} → ${i.stockAfter} (${i.reason})`).join('; ')}
+                  </div>
+                </div>
+              ))}
+              {state.penyesuaian.length === 0 && (
+                <p className="px-4 py-10 text-center text-xs text-slate-400">Belum ada penyesuaian.</p>
+              )}
+            </div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3 font-semibold">Nota Penyesuaian</th>
@@ -503,7 +673,22 @@ export default function FarmasiPage() {
               ))}
             </div>
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              {/* Mobile: kartu retur */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {state.retur
+                  .filter((r) => r.type === (returTab === 'pengeluaran' ? 'Retur Pengeluaran' : 'Retur Penerimaan'))
+                  .map((r) => (
+                    <div key={r.id} className="px-4 py-3.5 space-y-1">
+                      <div className="text-[11px] text-slate-400">{fmtDate(r.date)}</div>
+                      <div className="text-xs text-slate-600">{r.items.map((i) => `${i.name} ×${i.qty} (${i.reason})`).join(', ')}</div>
+                    </div>
+                  ))}
+                {state.retur.filter((r) => r.type === (returTab === 'pengeluaran' ? 'Retur Pengeluaran' : 'Retur Penerimaan')).length === 0 && (
+                  <p className="px-4 py-10 text-center text-xs text-slate-400">Belum ada retur pada kategori ini.</p>
+                )}
+              </div>
+              {/* Desktop: tabel */}
+              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3 font-semibold">Tanggal</th>
