@@ -47,7 +47,42 @@ export default function BillingPage() {
       <Topbar title="Billing" subtitle="Tagihan pasien, tagihan apotek, dan klaim asuransi" />
       <main className="flex-1 p-4 md:p-6 space-y-5">
         {/* Ringkasan */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Mobile: satu kartu ringkas 3 baris */}
+        <div className="md:hidden bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+              <Receipt className="w-4 h-4 text-amber-500" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Belum Dibayar</div>
+              <div className="text-base font-bold text-rose-600 truncate">{fmtRupiah(totalBelum)}</div>
+            </div>
+            <div className="text-[10px] text-slate-400 shrink-0">
+              {state.invoices.filter((i) => i.paymentStatus === 'Belum Dibayar').length} invoice
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
+              <Pill className="w-4 h-4 text-teal-500" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Tagihan Apotek</div>
+              <div className="text-base font-bold text-slate-900 truncate">{state.apotekInvoices.length} tagihan</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4 text-blue-500" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Klaim Asuransi</div>
+              <div className="text-base font-bold text-slate-900 truncate">{fmtRupiah(claimList.reduce((s, c) => s + c.amount, 0))}</div>
+            </div>
+            <div className="text-[10px] text-slate-400 shrink-0">{claimList.length} klaim</div>
+          </div>
+        </div>
+        {/* Desktop: 3 kartu */}
+        <div className="hidden md:grid md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <Receipt className="w-4 h-4 text-amber-500" />
@@ -98,19 +133,59 @@ export default function BillingPage() {
         {/* ======== TAGIHAN PASIEN ======== */}
         {tab === 'pasien' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Daftar Tagihan</h2>
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Cari Pasien"
-                  className="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-60"
+                  className="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-full sm:w-60"
                 />
               </div>
             </div>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            {/* Mobile: kartu tagihan */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredInvoices.map((inv) => (
+                <div key={inv.id} className="px-4 py-3.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium text-slate-800 text-sm truncate">{inv.patientName}</div>
+                    {inv.paymentStatus === 'Lunas' ? (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 shrink-0">Lunas</span>
+                    ) : (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 shrink-0">Belum Dibayar</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {fmtDate(inv.date)} · {inv.group} · {inv.doctor}
+                  </div>
+                  {inv.paymentStatus === 'Lunas' && inv.paymentMethod && (
+                    <div className="text-[10px] text-slate-400">{inv.paymentMethod}{inv.paidAt ? ` · ${fmtDate(inv.paidAt)}` : ''}</div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <span className="font-bold text-slate-800">{fmtRupiah(inv.total)}</span>
+                    {inv.paymentStatus === 'Belum Dibayar' ? (
+                      <button
+                        onClick={() => { setPaying(inv.id); setMethod('Tunai'); setDiscount(0); }}
+                        className="text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-3.5 py-2 rounded-lg transition shrink-0"
+                      >
+                        Bayar
+                      </button>
+                    ) : (
+                      <button onClick={() => window.print()} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-2 rounded-lg transition shrink-0">
+                        <Printer className="w-3 h-3" /> Cetak
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {filteredInvoices.length === 0 && (
+                <p className="px-4 py-10 text-center text-xs text-slate-400">Belum ada tagihan. Tagihan dibuat otomatis saat rekam medis diselesaikan.</p>
+              )}
+            </div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3 font-semibold">Tgl. Masuk</th>
@@ -170,7 +245,7 @@ export default function BillingPage() {
         {/* ======== TAGIHAN APOTEK ======== */}
         {tab === 'apotek' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center gap-2">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex flex-wrap items-center gap-2">
               <button
                 onClick={() => { setShowObat(true); setObatForm((f) => ({ ...f, type: 'Obat Bebas' })); }}
                 className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2 rounded-lg transition"
@@ -184,7 +259,31 @@ export default function BillingPage() {
                 <Plus className="w-3.5 h-3.5" /> Obat Resep
               </button>
             </div>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            {/* Mobile: kartu apotek */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {state.apotekInvoices.map((a) => (
+                <div key={a.id} className="px-4 py-3.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-slate-800 truncate">{a.patientName}</div>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${a.paymentStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {a.paymentStatus}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {fmtDate(a.date)} · <span className="text-teal-700 font-medium">{a.type}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <span className="text-[11px] text-slate-500 truncate">{a.items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</span>
+                    <span className="font-bold text-slate-800 text-sm shrink-0">{fmtRupiah(a.total)}</span>
+                  </div>
+                </div>
+              ))}
+              {state.apotekInvoices.length === 0 && (
+                <p className="px-4 py-10 text-center text-xs text-slate-400">Belum ada tagihan apotek.</p>
+              )}
+            </div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3 font-semibold">Tanggal</th>
@@ -223,10 +322,39 @@ export default function BillingPage() {
         {/* ======== KLAIM ASURANSI ======== */}
         {tab === 'klaim' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
+            <div className="px-4 md:px-5 py-4 border-b border-slate-100">
               <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Daftar Klaim Pasien</h2>
             </div>
-            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            {/* Mobile: kartu klaim */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {claimList.map((c) => (
+                <div key={c.id} className="px-4 py-3.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-slate-800 truncate">{c.patientName}</div>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                      c.status === 'Dibayar' ? 'bg-emerald-100 text-emerald-700'
+                      : c.status === 'Diproses' ? 'bg-blue-100 text-blue-700'
+                      : c.status === 'Ditolak' ? 'bg-rose-100 text-rose-700'
+                      : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {c.status}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 truncate">{c.penjamin} · {fmtDate(c.date)}</div>
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <span className="text-[11px] text-slate-400">Nilai klaim</span>
+                    <span className="font-bold text-slate-800">{fmtRupiah(c.amount)}</span>
+                  </div>
+                </div>
+              ))}
+              {claimList.length === 0 && (
+                <p className="px-4 py-10 text-center text-xs text-slate-400">
+                  Daftar Klaim Pasien Belum Tersedia — tagihan pasien akan muncul setelah data Rekam Medis dilengkapi.
+                </p>
+              )}
+            </div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3 font-semibold">Nama Pasien</th>
@@ -271,7 +399,7 @@ export default function BillingPage() {
       {/* Modal Bayar */}
       {payingInv && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setPaying(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800">Pembayaran {payingInv.patientName}</h3>
               <button onClick={() => setPaying(null)} className="text-slate-400 hover:text-slate-700 text-xl">×</button>
@@ -329,7 +457,7 @@ export default function BillingPage() {
       {/* Modal Obat Bebas / Resep */}
       {showObat && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowObat(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800">Form {obatForm.type}</h3>
               <button onClick={() => setShowObat(false)} className="text-slate-400 hover:text-slate-700 text-xl">×</button>

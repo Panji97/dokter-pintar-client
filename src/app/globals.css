@@ -194,6 +194,31 @@ select:not([multiple]):disabled {
   .animate-heartbeat { animation: none; }
 }
 
+/* ============================================================
+ * LANDING PAGE — animasi mengambang & pola dekoratif
+ * ============================================================ */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.animate-float { animation: float-y 6s ease-in-out infinite; }
+.animate-float-slow { animation: float-y 9s ease-in-out infinite; }
+@keyframes float-y-alt {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+.animate-float-alt { animation: float-y-alt 7s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-float, .animate-float-slow, .animate-float-alt { animation: none; }
+}
+
+/* Pola titik honeycomb halus — warna mengikuti currentColor dengan opasitas. */
+.bg-dots { background-image: radial-gradient(currentColor 1.2px, transparent 1.2px); background-size: 18px 18px; }
+
+/* Marker default <details> disembunyikan untuk FAQ landing (chevron kustom). */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+
 /* Print styles for invoices */
 @media print {
   aside, header, .no-print {

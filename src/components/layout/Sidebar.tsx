@@ -1,12 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, CalendarPlus, ClipboardPlus, FileHeart, ReceiptText, FileOutput,
-  Pill, BarChart3, Settings, Activity, ChevronRight,
+  Pill, BarChart3, Settings, Activity, ChevronRight, LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BrandLogo } from './BrandLogo';
+import { LogoLink } from './LogoLink';
+import { getSession, logout, type Session } from '@/lib/auth';
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -31,6 +35,27 @@ interface SidebarProps {
  */
 export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    setSession(getSession());
+  }, []);
+
+  const handleLogout = () => {
+    onNavigate?.();
+    logout();
+    router.replace('/login');
+  };
+
+  // Inisial nama untuk avatar (maks. 2 huruf).
+  const initials = (session?.name ?? 'DP')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
 
   return (
     <aside className="w-full h-full bg-slate-950 text-slate-300 flex flex-col relative overflow-hidden">
@@ -40,16 +65,9 @@ export function Sidebar({ onNavigate }: SidebarProps) {
 
       {/* Logo / Brand */}
       <div className="px-4 pt-5 pb-4 border-b border-white/10 relative">
-        <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center shadow-[0_0_18px_rgba(45,212,191,0.45)] shrink-0">
-            <span className="text-slate-950 font-black text-lg">D</span>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-950" />
-          </div>
-          <div className="min-w-0">
-            <div className="font-bold text-white text-base leading-tight tracking-tight">Dokter Pintar</div>
-            <div className="text-[10px] text-slate-400 uppercase tracking-[0.18em]">SIM &amp; RME FasKes</div>
-          </div>
-        </div>
+        <LogoLink onNavigate={onNavigate} className="block rounded-lg outline-none">
+          <BrandLogo />
+        </LogoLink>
       </div>
 
       {/* Navigation */}
@@ -102,17 +120,21 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         </div>
       </div>
 
-      {/* Footer User Info */}
+      {/* Footer: info sesi + logout */}
       <div className="px-3 pb-4 border-t border-white/10 pt-3 relative">
-        <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-white/5 transition text-left">
+        <button
+          onClick={handleLogout}
+          title="Keluar dari akun"
+          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-rose-500/10 transition text-left group/user"
+        >
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-slate-950 text-xs font-bold shrink-0">
-            DP
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white truncate">Dokter Pintar</div>
-            <div className="text-[10px] text-slate-500 truncate">Mitra Dokter Pintar · FasKes Gigi</div>
+            <div className="text-xs font-semibold text-white truncate">{session?.name ?? 'Pengguna'}</div>
+            <div className="text-[10px] text-slate-500 truncate">{session?.role ?? 'Belum masuk'}</div>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-600 shrink-0" />
+          <LogOut className="w-4 h-4 text-slate-600 shrink-0 group-hover/user:text-rose-400 transition" />
         </button>
       </div>
     </aside>

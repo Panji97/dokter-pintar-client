@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { Odontogram } from '@/components/rme/Odontogram';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
@@ -10,8 +11,8 @@ import {
   EmrDocument, DiagnosaItem, TindakanItem, AlkesItem, CpptEntry, KondisiGigi,
 } from '@/types/clinic';
 import {
-  Save, Plus, Trash2, FileText, Upload, FileCheck, FileSignature, ShieldCheck, ClipboardCheck,
-  StickyNote, Check,
+  Plus, Trash2, FileText, Upload, FileCheck, FileSignature, ShieldCheck, ClipboardCheck,
+  StickyNote,
 } from 'lucide-react';
 
 type MainTab = 'riwayat' | 'so' | 'ap' | 'p' | 'cppt';
@@ -35,7 +36,6 @@ export default function EmrDetailPage() {
   const [soTab, setSoTab] = useState<SoTab>('anamnesa-umum');
   const [apTab, setApTab] = useState<ApTab>('dokumen');
   const [pTab, setPTab] = useState<PTab>('apotek');
-  const [saved, setSaved] = useState(false);
   const [draft, setDraft] = useState<EmrDocument>(doc);
 
   // form state untuk tambah entitas
@@ -52,12 +52,6 @@ export default function EmrDetailPage() {
     const diskon = draft.tindakan.reduce((s, t) => s + t.discount, 0);
     return { tindakan, alkes, obat, diskon, total: tindakan + alkes + obat };
   }, [draft]);
-
-  const persist = () => {
-    updateEmr(regId, draft);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
 
   const selesai = () => {
     updateEmr(regId, draft);
@@ -82,11 +76,11 @@ export default function EmrDetailPage() {
   if (!reg) {
     return (
       <>
-        <Topbar title="Rekam Medis" />
-        <main className="flex-1 p-6">
+        <Topbar title="Rekam Medis" showBrand />
+        <main className="flex-1 p-4 md:p-6">
           <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-sm text-slate-400">
             Registrasi tidak ditemukan.{' '}
-            <a href="/rekam-medis" className="text-teal-600 font-medium">Kembali ke daftar</a>
+            <Link href="/rekam-medis" className="text-teal-600 font-medium">Kembali ke daftar</Link>
           </div>
         </main>
       </>
@@ -96,33 +90,36 @@ export default function EmrDetailPage() {
   const regDate = fmtDateTime(reg.regDate);
 
   const subTabCls = (active: boolean) =>
-    `px-4 py-2 rounded-lg text-xs font-medium transition border ${
+    `px-4 py-2 rounded-lg text-xs font-medium transition border shrink-0 whitespace-nowrap ${
       active ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
     }`;
 
   return (
     <>
-      <Topbar title="Rekam Medis Elektronik" subtitle={`${reg.patientName} · ${reg.group}`} />
+      {/* Topbar yang sama dengan halaman lain + brand (pengganti brand di leftbar). */}
+      <Topbar title="Rekam Medis" subtitle={`${reg.patientName} · ${reg.group}`} showBrand />
 
       {/* Header pasien */}
       <div className="px-4 md:px-6 pt-4">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 grid grid-cols-2 md:grid-cols-3 gap-4">
-          {[
-            ['Nama Pasien', reg.patientName],
-            ['Tgl. Registrasi', regDate.date],
-            ['Dokter', reg.doctor],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">{label}</div>
-              <div className="text-sm font-semibold text-slate-800 mt-0.5 truncate">{value}</div>
-            </div>
-          ))}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+            {[
+              ['Nama Pasien', reg.patientName],
+              ['Tgl. Registrasi', regDate.date],
+              ['Dokter', reg.doctor],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-3 md:block">
+                <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider shrink-0">{label}</div>
+                <div className="text-sm font-semibold text-slate-800 md:mt-0.5 truncate text-right md:text-left">{value}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Tab utama */}
       <div className="px-4 md:px-6 pt-4">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {([
             ['riwayat', 'Rekam Medis'],
             ['so', 'Catatan FasKes (SO)'],
@@ -133,7 +130,7 @@ export default function EmrDetailPage() {
             <button
               key={key}
               onClick={() => setMainTab(key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition border ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition border shrink-0 whitespace-nowrap ${
                 mainTab === key
                   ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -142,16 +139,7 @@ export default function EmrDetailPage() {
               {label}
             </button>
           ))}
-          <div className="ml-auto flex flex-wrap gap-2">
-            <button
-              onClick={persist}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                saved ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'
-              }`}
-            >
-              {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-              {saved ? 'Tersimpan!' : 'Simpan'}
-            </button>
+          <div className="ml-auto hidden md:flex gap-2 shrink-0 pl-2">
             <button onClick={selesai} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white transition">
               <FileCheck className="w-4 h-4" />
               Selesai
@@ -160,15 +148,57 @@ export default function EmrDetailPage() {
         </div>
       </div>
 
-      <main className="flex-1 p-4 md:p-6 space-y-5">
+      {/* Aksi Selesai mengambang — hanya mobile */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-30 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] pointer-events-none">
+        <button onClick={selesai} className="pointer-events-auto w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white shadow-xl transition">
+          <FileCheck className="w-4 h-4" />
+          Selesai
+        </button>
+      </div>
+
+      <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6 space-y-5">
         {/* ============ TAB RIWAYAT ============ */}
         {mainTab === 'riwayat' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="px-5 py-4 border-b border-slate-100">
               <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Riwayat Medis Pasien</h2>
             </div>
-            <div className="p-5">
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+            <div className="p-4 md:p-5">
+              {/* Mobile: kartu riwayat */}
+              <div className="md:hidden space-y-3">
+                {state.registrations
+                  .filter((r) => r.patientId === reg.patientId && state.emr[r.id])
+                  .map((r) => {
+                    const emr = state.emr[r.id];
+                    return (
+                      <div key={r.id} className="rounded-xl border border-slate-200 p-3.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-slate-800">{fmtDate(r.regDate)}</span>
+                          <Link
+                            href={`/rekam-medis/${r.id}`}
+                            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition"
+                          >
+                            <FileText className="w-3 h-3" /> Buka
+                          </Link>
+                        </div>
+                        <div className="mt-1.5 text-sm font-medium text-slate-800">{r.serviceType}</div>
+                        <div className="text-[11px] text-slate-500">{emr.diagnosa[0]?.icd10Desc ?? '—'}</div>
+                        <div className="text-[11px] text-slate-400">{r.doctor}</div>
+                      </div>
+                    );
+                  })}
+                <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-800">{regDate.date}</span>
+                    <span className="text-[11px] text-teal-600 font-semibold">Sesi ini</span>
+                  </div>
+                  <div className="mt-1.5 text-sm font-medium text-slate-800">{reg.serviceType}</div>
+                  <div className="text-[11px] text-slate-500">{draft.diagnosa[0]?.icd10Desc ?? '—'}</div>
+                  <div className="text-[11px] text-slate-400">{reg.doctor}</div>
+                </div>
+              </div>
+              {/* Desktop: tabel */}
+              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3 font-semibold">Tgl. Periksa</th>
@@ -190,12 +220,12 @@ export default function EmrDetailPage() {
                           <td className="px-4 py-3 text-xs text-slate-700">{emr.diagnosa[0]?.icd10Desc ?? '—'}</td>
                           <td className="px-4 py-3 text-xs text-slate-600">{r.doctor}</td>
                           <td className="px-4 py-3 text-right">
-                            <a
+                            <Link
                               href={`/rekam-medis/${r.id}`}
                               className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition"
                             >
                               <FileText className="w-3 h-3" /> Buka
-                            </a>
+                            </Link>
                           </td>
                         </tr>
                       );
@@ -221,7 +251,7 @@ export default function EmrDetailPage() {
         {/* ============ TAB SO ============ */}
         {mainTab === 'so' && (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {([
                 ['anamnesa-umum', 'Subjektif — Anamnesa Umum'],
                 ['anamnesa-odonto', 'Subjektif — Anamnesa Odontogram'],
@@ -233,7 +263,7 @@ export default function EmrDetailPage() {
             </div>
 
             {soTab === 'anamnesa-umum' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {([
                   ['riwayatPenyakit', 'Riwayat Penyakit'],
                   ['keluhanUtama', 'Keluhan Utama'],
@@ -270,7 +300,7 @@ export default function EmrDetailPage() {
             )}
 
             {soTab === 'anamnesa-odonto' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {([
                   ['occlusi', 'Occlusi'],
                   ['torusPlatinus', 'Torus Platinus'],
@@ -289,7 +319,7 @@ export default function EmrDetailPage() {
             )}
 
             {soTab === 'pemeriksaan' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
                 <div>
                   <label className={labelCls}>Deskripsi Pemeriksaan</label>
                   <textarea rows={2} value={draft.pemeriksaanUmum.deskripsi} onChange={(e) => setDraft({ ...draft, pemeriksaanUmum: { ...draft.pemeriksaanUmum, deskripsi: e.target.value } })} className={inputCls} />
@@ -349,7 +379,7 @@ export default function EmrDetailPage() {
         {/* ============ TAB AP ============ */}
         {mainTab === 'ap' && (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {([
                 ['dokumen', 'Dokumen Medis'],
                 ['kondisi', 'Kondisi'],
@@ -362,7 +392,7 @@ export default function EmrDetailPage() {
             </div>
 
             {apTab === 'dokumen' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-3">
                 <p className="text-xs text-slate-500 mb-2">Centang dokumen medis yang sudah dilengkapi (sesuai alur dokumen Dokter Pintar):</p>
                 {([
                   ['generalConsent', 'Anamnesa — General Consent', FileSignature],
@@ -387,9 +417,31 @@ export default function EmrDetailPage() {
             )}
 
             {apTab === 'kondisi' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
                 <h2 className="font-bold text-slate-800 text-sm">Data Kondisi — Odontogram</h2>
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                {/* Mobile: daftar kondisi */}
+                <div className="md:hidden space-y-2">
+                  {draft.kondisi.map((k) => (
+                    <div key={k.id} className="flex items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3">
+                      <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                        {k.toothNumber ?? '-'}
+                      </span>
+                      <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">{k.deskripsi || '-'}</span>
+                      <button
+                        onClick={() => setDraft({ ...draft, kondisi: draft.kondisi.filter((x) => x.id !== k.id) })}
+                        aria-label="Hapus kondisi"
+                        className="text-rose-500 hover:text-rose-700 shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {draft.kondisi.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-2">Belum ada data kondisi.</p>
+                  )}
+                </div>
+                {/* Desktop: tabel */}
+                <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-2.5 font-semibold">No</th>
@@ -448,8 +500,8 @@ export default function EmrDetailPage() {
             )}
 
             {apTab === 'diagnosa' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-                <div className="flex gap-2">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
+                <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {(['Diagnosa dokter', 'Asuhan keperawatan'] as const).map((t) => (
                     <button
                       key={t}
@@ -460,7 +512,32 @@ export default function EmrDetailPage() {
                     </button>
                   ))}
                 </div>
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                {/* Mobile: daftar diagnosa */}
+                <div className="md:hidden space-y-3">
+                  {draft.diagnosa.map((d) => (
+                    <div key={d.id} className="rounded-xl border border-slate-200 p-3.5 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-teal-700">{d.icd10Code}</span>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{d.type}</span>
+                        </div>
+                        <div className="text-sm text-slate-700 mt-1">{d.icd10Desc}</div>
+                      </div>
+                      <button
+                        onClick={() => setDraft({ ...draft, diagnosa: draft.diagnosa.filter((x) => x.id !== d.id) })}
+                        aria-label="Hapus diagnosa"
+                        className="text-rose-500 hover:text-rose-700 shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {draft.diagnosa.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-2">Data diagnosa belum tersedia. Tambahkan di bawah.</p>
+                  )}
+                </div>
+                {/* Desktop: tabel */}
+                <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-2.5 font-semibold">Tipe</th>
@@ -517,8 +594,46 @@ export default function EmrDetailPage() {
             )}
 
             {apTab === 'tindakan' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
+                {/* Mobile: kartu tindakan */}
+                <div className="md:hidden space-y-3">
+                  {draft.tindakan.map((t) => (
+                    <div key={t.id} className="rounded-xl border border-slate-200 p-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-slate-800 truncate">{t.name}</div>
+                          <div className="text-[11px] font-mono text-slate-400">{t.code} · Gigi {t.tooth} · ×{t.qty}</div>
+                        </div>
+                        <button
+                          onClick={() => setDraft({ ...draft, tindakan: draft.tindakan.filter((x) => x.id !== t.id) })}
+                          aria-label="Hapus tindakan"
+                          className="text-rose-500 hover:text-rose-700 shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-dashed border-slate-200 grid grid-cols-3 gap-2 text-[11px]">
+                        <div>
+                          <div className="text-slate-400">Tarif</div>
+                          <div className="font-semibold text-slate-700">{fmtRupiah(t.price)}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400">Diskon</div>
+                          <div className="font-semibold text-slate-700">{fmtRupiah(t.discount)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-slate-400">Subtotal</div>
+                          <div className="font-bold text-teal-700">{fmtRupiah(t.qty * t.price - t.discount)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {draft.tindakan.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-2">Belum ada tindakan.</p>
+                  )}
+                </div>
+                {/* Desktop: tabel */}
+                <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-2.5 font-semibold">Kode Pelayanan</th>
@@ -606,8 +721,36 @@ export default function EmrDetailPage() {
             )}
 
             {apTab === 'alkes' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
+                {/* Mobile: kartu alkes */}
+                <div className="md:hidden space-y-3">
+                  {draft.alkes.map((a) => (
+                    <div key={a.id} className="rounded-xl border border-slate-200 p-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-slate-800 truncate">{a.name}</div>
+                          <div className="text-[11px] font-mono text-slate-400">{a.code} · ×{a.qty}</div>
+                        </div>
+                        <button
+                          onClick={() => setDraft({ ...draft, alkes: draft.alkes.filter((x) => x.id !== a.id) })}
+                          aria-label="Hapus alkes"
+                          className="text-rose-500 hover:text-rose-700 shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-dashed border-slate-200 flex items-center justify-between gap-2 text-[11px]">
+                        <span className="text-slate-400">@ {fmtRupiah(a.price)}</span>
+                        <span className="font-bold text-teal-700">{fmtRupiah(a.qty * a.price)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {draft.alkes.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-2">Data pemakaian alkes belum tersedia.</p>
+                  )}
+                </div>
+                {/* Desktop: tabel */}
+                <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                       <th className="px-4 py-2.5 font-semibold">Kode</th>
@@ -671,7 +814,7 @@ export default function EmrDetailPage() {
         {/* ============ TAB P ============ */}
         {mainTab === 'p' && (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {([
                 ['apotek', 'Plan — Resep Apotek'],
                 ['rujukan', 'Plan — Resep Rujuk ke Apotek Luar'],
@@ -687,7 +830,7 @@ export default function EmrDetailPage() {
               return pTab === section ? (
                 <div key={section} className="space-y-4">
                   {list.map((rp, ri) => (
-                    <div key={ri} className="bg-white rounded-xl border border-slate-200 p-5">
+                    <div key={ri} className="bg-white rounded-xl border border-slate-200 p-4 md:p-5">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                         <h3 className="font-bold text-slate-800 text-sm">Resep {ri + 1}</h3>
                         <button
@@ -703,7 +846,45 @@ export default function EmrDetailPage() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+                      {/* Mobile: kartu item resep */}
+                      <div className="md:hidden space-y-2.5">
+                        {rp.items.map((it) => (
+                          <div key={it.id} className="rounded-xl border border-slate-200 p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-slate-800 truncate">{it.name}</div>
+                                <div className="text-[11px] font-mono text-slate-400">{it.code} · ×{it.qty}</div>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  setDraft({
+                                    ...draft,
+                                    resepApotek: isApotek
+                                      ? draft.resepApotek.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== it.id) } : r2))
+                                      : draft.resepApotek,
+                                    resepRujukan: !isApotek
+                                      ? draft.resepRujukan.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== it.id) } : r2))
+                                      : draft.resepRujukan,
+                                  })
+                                }
+                                aria-label="Hapus item resep"
+                                className="text-rose-500 hover:text-rose-700 shrink-0"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
+                              <span className="text-slate-400">@ {fmtRupiah(it.price)}</span>
+                              <span className="font-bold text-teal-700">{fmtRupiah(it.qty * it.price)}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {rp.items.length === 0 && (
+                          <p className="text-xs text-slate-400 text-center py-2">Resep kosong.</p>
+                        )}
+                      </div>
+                      {/* Desktop: tabel */}
+                      <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                             <th className="px-4 py-2.5 font-semibold">Kode Barang</th>
@@ -787,7 +968,7 @@ export default function EmrDetailPage() {
         {/* ============ TAB CPPT ============ */}
         {mainTab === 'cppt' && (
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
               <h2 className="font-bold text-slate-800 text-sm">Tambah CPPT (Catatan Perkembangan Pasien Terintegrasi)</h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
@@ -831,7 +1012,40 @@ export default function EmrDetailPage() {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
+              {/* Mobile: kartu CPPT */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {draft.cppt.map((c) => {
+                  const dt = fmtDateTime(c.datetime);
+                  return (
+                    <div key={c.id} className="px-4 py-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-slate-800">{dt.date} · {dt.time}</div>
+                          <div className="text-[11px] text-slate-500">{c.ppa} — {c.profesi}</div>
+                        </div>
+                        <button
+                          onClick={() => setDraft({ ...draft, cppt: draft.cppt.filter((x) => x.id !== c.id) })}
+                          aria-label="Hapus CPPT"
+                          className="text-rose-500 hover:text-rose-700 shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="mt-2 space-y-1 text-xs text-slate-600">
+                        <div><b>S:</b> {c.subjektif || '—'}</div>
+                        <div><b>O:</b> {c.objektif || '—'}</div>
+                        <div><b>A:</b> {c.asesmen || '—'}</div>
+                        <div><b>P:</b> {c.plan || '—'}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {draft.cppt.length === 0 && (
+                  <p className="px-4 py-8 text-center text-xs text-slate-400">Belum ada catatan CPPT.</p>
+                )}
+              </div>
+              {/* Desktop: tabel */}
+              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
                     <th className="px-4 py-3 font-semibold">Tanggal dan Waktu</th>

@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Search, Bell, Calendar, Menu, ReceiptText, AlertTriangle, ClipboardPlus, Pill, PanelRight } from 'lucide-react';
 import { useShell } from './AppShell';
+import { BrandLogo } from './BrandLogo';
+import { LogoLink } from './LogoLink';
 import { ThemeToggle } from './ThemeToggle';
 import { useClinicStore, fmtRupiah } from '@/lib/ClinicStore';
 import {
@@ -13,11 +15,17 @@ import {
 interface TopbarProps {
   title: string;
   subtitle?: string;
+  /**
+   * Tampilkan brand "Dokter Pintar" di kiri Topbar. Dipakai di route group
+   * (full-page) yang tidak punya leftbar — di halaman lain brand sudah
+   * ada di sidebar.
+   */
+  showBrand?: boolean;
 }
 
 /** Header konten — design awal: bar putih sticky dengan search & dropdown notifikasi fungsional. */
-export function Topbar({ title, subtitle }: TopbarProps) {
-  const { openSidebar, queueOpen, toggleQueue, setQueueSheetOpen } = useShell();
+export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
+  const { openSidebar, queueOpen, toggleQueue, setQueueSheetOpen, desktopSidebarOpen, toggleDesktopSidebar } = useShell();
   const router = useRouter();
   const pathname = usePathname();
   const { state } = useClinicStore();
@@ -81,14 +89,37 @@ export function Topbar({ title, subtitle }: TopbarProps) {
   return (
     <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-30">
       <div className="flex items-center gap-3 min-w-0">
-        {/* Hamburger: tampil < md karena leftbar menjadi kolom di md */}
+        {/* Brand — hanya di full-page (tanpa leftbar). */}
+        {showBrand && (
+          <LogoLink className="shrink-0 rounded-lg outline-none hidden min-[480px]:block">
+            <BrandLogo theme="light" className="shrink-0" />
+          </LogoLink>
+        )}
+        {/* Hamburger mobile: buka sheet leftbar (< md) */}
         <button
           onClick={openSidebar}
           aria-label="Buka menu"
-          className="md:hidden p-2 -ml-2 rounded-lg hover:bg-slate-100 transition text-slate-600"
+          className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition text-slate-600"
         >
           <Menu className="w-5 h-5" />
         </button>
+        {/* Hamburger desktop: HANYA di full-page (showBrand) untuk membuka drawer menu utama.
+            Di halaman (main) tidak ditampilkan. */}
+        {showBrand && (
+          <button
+            onClick={toggleDesktopSidebar}
+            aria-label={desktopSidebarOpen ? 'Sembunyikan menu utama' : 'Tampilkan menu utama'}
+            aria-expanded={desktopSidebarOpen}
+            title="Menu utama"
+            className="hidden md:inline-flex p-2 rounded-lg hover:bg-slate-100 transition text-slate-600 outline-none"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+        {/* Pembatas — hanya di full-page, setelah hamburger. */}
+        {showBrand && (
+          <div aria-hidden className="w-px h-8 bg-slate-200 shrink-0 hidden sm:block" />
+        )}
         <div className="min-w-0">
           <h1 className="text-base md:text-lg font-bold text-slate-900 truncate">{title}</h1>
           {subtitle && <p className="hidden sm:block text-xs text-slate-500 truncate">{subtitle}</p>}
