@@ -20,17 +20,17 @@ const whyItems = [
   },
   {
     icon: Smile,
-    title: 'Klinik Gigi & Mulut',
+    title: 'Faskes Gigi & Mulut',
     desc: 'Odontogram visual, rencana perawatan bertahap, dan jadwal kontrol yang terpantau.',
   },
   {
     icon: Activity,
-    title: 'Klinik Umum & Pratama',
+    title: 'Faskes Umum & Pratama',
     desc: 'Antrean harian, alur pasien BPJS maupun umum, dan laporan kunjungan otomatis.',
   },
   {
     icon: Sparkles,
-    title: 'Klinik Kecantikan',
+    title: 'Faskes Kecantikan',
     desc: 'Paket treatment, dokumentasi before-after, dan pengingat jadwal treatment pasien.',
   },
 ];
@@ -44,29 +44,25 @@ const integrations = [
   { icon: FileDigit, label: 'ICD-10 & ICD-9-CM' },
 ];
 
-/* Alur kerja harian yang diringkas aplikasi — tampil sebagai strip bernomor di hero. */
+/* Alur kerja harian yang diringkas aplikasi — tampil sebagai strip di hero. */
 const workSteps = [
   {
     icon: ClipboardPlus,
-    no: '01',
     title: 'Daftarkan Kunjungan',
     desc: 'Pasien baru & lama tercatat dalam hitungan detik — lengkap dengan poli, dokter, dan penjamin.',
   },
   {
     icon: Stethoscope,
-    no: '02',
     title: 'Periksa & Dokumentasikan',
     desc: 'SOAP, odontogram, diagnosa ICD, tindakan, hingga resep terdokumentasi dalam satu layar.',
   },
   {
     icon: ReceiptText,
-    no: '03',
     title: 'Selesaikan di Kasir',
     desc: 'Tagihan tersusun otomatis. Terima tunai, QRIS, atau catat sebagai klaim penjamin.',
   },
   {
     icon: BarChart3,
-    no: '04',
     title: 'Pantau Lewat Laporan',
     desc: 'Kunjungan, pendapatan, dan stok terpantau real-time kapan pun dibutuhkan.',
   },
@@ -147,14 +143,14 @@ const testimonials = [
     quote:
       'Pencatatan gigi yang tadinya menumpuk di kertas sekarang rapi dan cepat dicari. Waktu kontrol tiap pasien jadi jauh lebih singkat.',
     name: 'drg. Sinta Maharani',
-    role: 'Klinik Gigi Senyum Ceria, Surabaya',
+    role: 'Faskes Gigi Senyum Ceria, Surabaya',
     initials: 'SM',
   },
   {
     quote:
       'Kasir dan laporan beres otomatis setiap hari. Stok obat terpantau sehingga tidak ada lagi pembelian dobel yang tidak perlu.',
     name: 'dr. Hendra Gunawan',
-    role: 'Klinik Pratama Sehat Bersama, Semarang',
+    role: 'Faskes Pratama Sehat Bersama, Semarang',
     initials: 'HG',
   },
   {
@@ -265,7 +261,7 @@ export default function LandingPage() {
             </span>
 
             <h1 className="mt-6 text-4xl md:text-5xl lg:text-[3.4rem] font-black text-teal-800 dark:text-teal-300 tracking-tight leading-[1.08]">
-              Urus Pasien &amp; Operasional Klinik{' '}
+              Urus Pasien &amp; Operasional Faskes{' '}
               <span className="bg-gradient-to-r from-teal-600 to-teal-400 dark:from-teal-400 dark:to-teal-300 bg-clip-text text-transparent">
                 dalam Satu Aplikasi
               </span>
@@ -273,7 +269,7 @@ export default function LandingPage() {
 
             <p className="mt-5 text-base md:text-lg text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl mx-auto">
               Dari pendaftaran hingga laporan keuangan — Dokter Pintar merapikan alur kerja harian
-              praktik mandiri, klinik gigi, klinik umum, dan klinik kecantikan tanpa ribet dan tanpa
+              praktik mandiri, faskes gigi, faskes umum, dan faskes kecantikan tanpa ribet dan tanpa
               aplikasi terpisah.
             </p>
 
@@ -308,9 +304,8 @@ export default function LandingPage() {
         {/* Strip alur kerja harian di FasKes */}
         <div className="max-w-6xl mx-auto px-4 md:px-6 pb-20 lg:pb-28 relative">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {workSteps.map(({ icon: Icon, no, title, desc }) => (
-              <div key={no} className="relative rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm overflow-hidden">
-                <span aria-hidden className="absolute -top-4 right-2 text-7xl font-black text-slate-100 dark:text-white/5 select-none">{no}</span>
+            {workSteps.map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm overflow-hidden">
                 <div className="relative">
                   <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/30">
                     <Icon className="w-5 h-5" />
@@ -479,7 +474,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-20 relative">
           <SectionHeading
             eyebrow="Kemampuan"
-            title="Satu Aplikasi, Semua Urusan Klinik Beres"
+            title="Satu Aplikasi, Semua Urusan Faskes Beres"
             sub="Modul-modul inti yang saling terhubung — data mengalir otomatis dari meja pendaftaran sampai laporan."
           />
 
@@ -679,7 +674,7 @@ export default function LandingPage() {
           <SectionHeading
             eyebrow="Paket"
             title="Harga Jujur Sesuai Skala Praktik Anda"
-            sub="Mulai dari praktik mandiri hingga jaringan klinik — semua paket sudah termasuk rekam medis elektronik."
+            sub="Mulai dari praktik mandiri hingga jaringan faskes — semua paket sudah termasuk rekam medis elektronik."
           />
 
           <div className="mt-12 grid md:grid-cols-3 gap-6 items-stretch">

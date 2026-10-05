@@ -89,7 +89,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           </h2>
           <p className="mt-4 text-sm text-slate-400 leading-relaxed max-w-sm">
             Registrasi, rekam medis elektronik, farmasi, billing, hingga laporan —
-            terintegrasi dalam satu platform yang dirancang untuk klinik gigi dan umum.
+            terintegrasi dalam satu platform yang dirancang untuk faskes gigi dan umum.
           </p>
           <ul className="mt-8 space-y-3">
             {[
