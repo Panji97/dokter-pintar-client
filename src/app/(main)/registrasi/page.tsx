@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Topbar } from "@/components/layout/Topbar";
+import { useShell } from "@/components/layout/AppShell";
 import { useClinicStore } from "@/lib/ClinicStore";
 import { Search, ClipboardPlus, ChevronLeft, ChevronRight, X } from "lucide-react";
 
@@ -41,10 +41,22 @@ function shiftDate(refDate: string, y: number, m: number, d: number) {
 }
 
 export default function RegistrasiPage() {
-  const router = useRouter();
   const { state, addPatient, addRegistration } = useClinicStore();
+  const { queueOpen, setQueueOpen, setQueueSheetOpen, toast } = useShell();
   const [tab, setTab] = useState<Tab>("baru");
   const [search, setSearch] = useState("");
+
+  /** Tampilkan rightbar antrean agar data registrasi baru terlihat. */
+  const showQueue = () => {
+    if (!queueOpen) setQueueOpen(true);
+    // Di mobile/tablet (<xl) rightbar tampil sebagai drawer — buka otomatis.
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1279px)").matches
+    ) {
+      setQueueSheetOpen(true);
+    }
+  };
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -59,6 +71,7 @@ export default function RegistrasiPage() {
     nik: "",
     group: "Umum",
     room: "Poli Gigi 1",
+    serviceType: "",
     doctor: "dr. Zaela",
   });
   const age = calcAge(form.birthDate, form.regDate || todayStr);
@@ -76,6 +89,14 @@ export default function RegistrasiPage() {
   };
 
   const rooms = state.rooms.map((r) => r.name);
+  // Daftar pilihan Pelayanan dari master tarif (Pengaturan → Pelayanan).
+  const serviceOptions = useMemo(
+    () =>
+      state.services.length > 0
+        ? state.services.map((s) => s.name)
+        : ["Pelayanan Dokter Gigi Umum"],
+    [state.services],
+  );
   const filteredPatients = useMemo(() => {
     const q = search.toLowerCase();
     return state.patients.filter(
@@ -112,18 +133,31 @@ export default function RegistrasiPage() {
       bloodType: "-",
       allergies: [],
     });
-    const reg = addRegistration({
+    addRegistration({
       patientId: patient.id,
       patientName: patient.name,
       group: form.group as never,
-      serviceType: "Pelayanan Dokter Gigi Umum",
+      serviceType: form.serviceType || serviceOptions[0],
       room: form.room,
       doctor: form.doctor,
       regDate: form.regDate
         ? new Date(`${form.regDate}T00:00:00`).toISOString()
         : undefined,
     });
-    router.push(`/rekam-medis/${reg.id}`);
+    // Tetap di halaman registrasi — data tampil di rightbar antrean.
+    toast(
+      `${patient.name} berhasil diregistrasi ke ${form.room}. Data antrean tampil di panel kanan.`,
+    );
+    setForm((f) => ({
+      ...f,
+      title: "",
+      name: "",
+      gender: "",
+      birthDate: "",
+      address: "",
+      nik: "",
+    }));
+    showQueue();
   };
 
   // Modal registrasi cepat per pasien (tombol Registrasi di tiap baris)
@@ -133,6 +167,7 @@ export default function RegistrasiPage() {
   const [modalForm, setModalForm] = useState({
     group: "Umum",
     room: "Poli Gigi 1",
+    serviceType: "",
     doctor: "dr. Zaela",
   });
   const regModalPatient = regModalPatientId
@@ -146,6 +181,7 @@ export default function RegistrasiPage() {
     setModalForm({
       group: "Umum",
       room: state.rooms[0]?.name ?? "Poli Gigi 1",
+      serviceType: state.services[0]?.name ?? "Pelayanan Dokter Gigi Umum",
       doctor: doctors[0]?.name ?? "dr. Zaela",
     });
     setRegModalPatientId(patientId);
@@ -153,16 +189,20 @@ export default function RegistrasiPage() {
 
   const submitModal = () => {
     if (!regModalPatient) return;
-    const reg = addRegistration({
+    addRegistration({
       patientId: regModalPatient.id,
       patientName: regModalPatient.name,
       group: modalForm.group as never,
-      serviceType: "Pelayanan Dokter Gigi Umum",
+      serviceType: modalForm.serviceType || serviceOptions[0],
       room: modalForm.room,
       doctor: modalForm.doctor,
     });
+    // Tetap di halaman registrasi — data tampil di rightbar antrean.
+    toast(
+      `${regModalPatient.name} berhasil diregistrasi ke ${modalForm.room}. Data antrean tampil di panel kanan.`,
+    );
     setRegModalPatientId(null);
-    router.push(`/rekam-medis/${reg.id}`);
+    showQueue();
   };
 
   // Tutup modal dengan tombol Escape
@@ -260,6 +300,22 @@ export default function RegistrasiPage() {
                       >
                         {rooms.map((r) => (
                           <option key={r}>{r}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>
+                        Pelayanan <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={form.serviceType || serviceOptions[0]}
+                        onChange={(e) =>
+                          setForm({ ...form, serviceType: e.target.value })
+                        }
+                        className={inputCls}
+                      >
+                        {serviceOptions.map((s) => (
+                          <option key={s}>{s}</option>
                         ))}
                       </select>
                     </div>
@@ -607,6 +663,20 @@ export default function RegistrasiPage() {
                 >
                   {rooms.map((r) => (
                     <option key={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Pelayanan</label>
+                <select
+                  value={modalForm.serviceType || serviceOptions[0]}
+                  onChange={(e) =>
+                    setModalForm({ ...modalForm, serviceType: e.target.value })
+                  }
+                  className={inputCls}
+                >
+                  {serviceOptions.map((s) => (
+                    <option key={s}>{s}</option>
                   ))}
                 </select>
               </div>

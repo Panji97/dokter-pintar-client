@@ -2,17 +2,26 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { CheckCircle2, X } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { QueueSidebar } from './QueueSidebar';
 import { ClinicStoreProvider } from '@/lib/ClinicStore';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
+interface ToastItem {
+  id: number;
+  message: string;
+}
+
 interface ShellContextValue {
   openSidebar: () => void;
   queueOpen: boolean;
+  setQueueOpen: (open: boolean) => void;
   toggleQueue: () => void;
   queueSheetOpen: boolean;
   setQueueSheetOpen: (open: boolean) => void;
+  /** Tampilkan toast sukses global (hilang otomatis setelah 4 detik). */
+  toast: (message: string) => void;
   /** Mode kolom: lipat/buka leftbar desktop. Mode drawer: buka sheet leftbar. */
   desktopSidebarOpen: boolean;
   toggleDesktopSidebar: () => void;
@@ -21,7 +30,9 @@ interface ShellContextValue {
 const ShellContext = createContext<ShellContextValue>({
   openSidebar: () => {},
   queueOpen: true,
+  setQueueOpen: () => {},
   toggleQueue: () => {},
+  toast: () => {},
   queueSheetOpen: false,
   setQueueSheetOpen: () => {},
   desktopSidebarOpen: true,
@@ -90,9 +101,32 @@ export function ShellProvider({
       return !v;
     });
   }, []);
+  /** Pastikan panel antrean desktop terbuka (dipakai setelah registrasi). */
+  const setQueueOpenValue = useCallback((open: boolean) => {
+    try {
+      localStorage.setItem('dokter-pintar-queue', open ? 'open' : 'closed');
+    } catch {
+      /* abaikan */
+    }
+    setQueueOpen(open);
+  }, []);
+
+  // Toast sukses global — tumpuk maksimal 3, tiap item hilang otomatis.
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toast = useCallback((message: string) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev.slice(-2), { id, message }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }, []);
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   const ctx = useMemo(
-    () => ({ openSidebar, queueOpen, toggleQueue, queueSheetOpen, setQueueSheetOpen, desktopSidebarOpen, toggleDesktopSidebar }),
-    [openSidebar, queueOpen, toggleQueue, queueSheetOpen, desktopSidebarOpen, toggleDesktopSidebar]
+    () => ({ openSidebar, queueOpen, setQueueOpen: setQueueOpenValue, toggleQueue, queueSheetOpen, setQueueSheetOpen, desktopSidebarOpen, toggleDesktopSidebar, toast }),
+    [openSidebar, queueOpen, setQueueOpenValue, toggleQueue, queueSheetOpen, desktopSidebarOpen, toggleDesktopSidebar, toast]
   );
 
   return (
@@ -113,6 +147,28 @@ export function ShellProvider({
             <QueueSidebar />
           </SheetContent>
         </Sheet>
+
+        {/* Toast sukses global */}
+        {toasts.length > 0 && (
+          <div className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 sm:w-96 z-[100] space-y-2" role="status" aria-live="polite">
+            {toasts.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-start gap-2.5 px-4 py-3 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl shadow-lg"
+              >
+                <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" />
+                <p className="flex-1">{t.message}</p>
+                <button
+                  onClick={() => dismissToast(t.id)}
+                  aria-label="Tutup notifikasi"
+                  className="p-1 rounded-lg text-emerald-500 hover:bg-emerald-100 hover:text-emerald-700 transition shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </ClinicStoreProvider>
     </ShellContext.Provider>
   );

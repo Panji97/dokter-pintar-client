@@ -30,6 +30,13 @@ export function QueueSidebar() {
     setTodayStr(new Date().toISOString().slice(0, 10));
   }, []);
 
+  // Filter antrean berdasarkan poli.
+  const [poliFilter, setPoliFilter] = useState('Semua');
+  const poliOptions = useMemo(
+    () => state.rooms.map((r) => r.name),
+    [state.rooms]
+  );
+
   // Registrasi hari ini — fallback: pendaftaran terakhir bila hari ini kosong.
   const sortedRegs = useMemo(
     () => [...state.registrations].sort((a, b) => b.regDate.localeCompare(a.regDate)),
@@ -39,7 +46,11 @@ export function QueueSidebar() {
     () => sortedRegs.filter((r) => r.regDate.slice(0, 10) === todayStr),
     [sortedRegs, todayStr]
   );
-  const shownRegs = todayRegs.length > 0 ? todayRegs : sortedRegs.slice(0, 10);
+  const baseRegs = todayRegs.length > 0 ? todayRegs : sortedRegs.slice(0, 10);
+  const shownRegs =
+    poliFilter === 'Semua'
+      ? baseRegs
+      : baseRegs.filter((r) => r.room === poliFilter);
   const isTodayView = todayRegs.length > 0;
   const waitingCount = shownRegs.filter((r) => r.status === 'Registrasi').length;
   const emrCount = shownRegs.filter((r) => r.status === 'Proses').length;
@@ -70,6 +81,24 @@ export function QueueSidebar() {
             </div>
           </div>
 
+          {/* Filter berdasarkan poli */}
+          <div className="px-4 py-2.5 border-b border-slate-100">
+            <label htmlFor="queue-poli-filter" className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
+              Filter Poli
+            </label>
+            <select
+              id="queue-poli-filter"
+              value={poliFilter}
+              onChange={(e) => setPoliFilter(e.target.value)}
+              className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-teal-400 bg-white text-slate-700"
+            >
+              <option value="Semua">Semua Poli</option>
+              {poliOptions.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Daftar registrasi */}
           <div className="max-h-[420px] overflow-y-auto divide-y divide-slate-50">
             {shownRegs.map((r) => (
@@ -84,7 +113,7 @@ export function QueueSidebar() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-800 truncate">{r.patientName}</div>
                   <div className="text-[11px] text-slate-400 truncate">
-                    {isTodayView ? fmtDateTime(r.regDate).time : fmtDate(r.regDate)} · {r.doctor} · {r.group}
+                    {isTodayView ? fmtDateTime(r.regDate).time : fmtDate(r.regDate)} · {r.room} · {r.doctor}
                   </div>
                 </div>
                 <span
@@ -99,7 +128,11 @@ export function QueueSidebar() {
             {shownRegs.length === 0 && (
               <div className="px-4 py-10 text-center">
                 <ClipboardPlus className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                <p className="text-xs text-slate-400">Belum ada pendaftaran hari ini.</p>
+                <p className="text-xs text-slate-400">
+                  {poliFilter === 'Semua'
+                    ? 'Belum ada pendaftaran hari ini.'
+                    : `Tidak ada antrean di ${poliFilter}.`}
+                </p>
                 <p className="text-[11px] text-slate-300 mt-1">Registrasi baru akan muncul di sini secara otomatis.</p>
               </div>
             )}
