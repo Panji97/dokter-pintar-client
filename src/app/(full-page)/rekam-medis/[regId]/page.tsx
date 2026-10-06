@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { Odontogram } from '@/components/rme/Odontogram';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
-import { ICD10_LIST, ICD9_LIST } from '@/lib/mockData';
+import { ICD10_LIST, ICD9_LIST } from '@/lib/icd';
 import {
   EmrDocument, DiagnosaItem, TindakanItem, AlkesItem, CpptEntry, KondisiGigi,
 } from '@/types/clinic';
@@ -26,7 +26,7 @@ const labelCls = 'text-xs font-medium text-slate-600 block mb-1';
 export default function EmrDetailPage() {
   const params = useParams<{ regId: string }>();
   const regId = params.regId;
-  const { state, getOrCreateEmr, updateEmr, addInvoice } = useClinicStore();
+  const { state, loading, getOrCreateEmr, updateEmr, addInvoice } = useClinicStore();
 
   const reg = state.registrations.find((r) => r.id === regId);
   const patient = state.patients.find((p) => p.id === reg?.patientId);
@@ -37,6 +37,12 @@ export default function EmrDetailPage() {
   const [apTab, setApTab] = useState<ApTab>('dokumen');
   const [pTab, setPTab] = useState<PTab>('apotek');
   const [draft, setDraft] = useState<EmrDocument>(doc);
+  // Sinkronkan draft saat data tiba (store memuat async).
+  const [draftFor, setDraftFor] = useState<string | null>(null);
+  if (!loading && reg && draftFor !== regId) {
+    setDraft(doc);
+    setDraftFor(regId);
+  }
 
   // form state untuk tambah entitas
   const [newKondisi, setNewKondisi] = useState<KondisiGigi>({ id: '', toothNumber: null, deskripsi: '' });
@@ -54,8 +60,8 @@ export default function EmrDetailPage() {
   }, [draft]);
 
   const selesai = () => {
-    updateEmr(regId, draft);
-    addInvoice({
+    void updateEmr(regId, draft);
+    void addInvoice({
       visitId: regId,
       patientId: reg?.patientId ?? '',
       patientName: reg?.patientName ?? '',
@@ -73,14 +79,16 @@ export default function EmrDetailPage() {
     setMainTab('riwayat');
   };
 
-  if (!reg) {
+  if (loading || !reg) {
     return (
       <>
         <Topbar title="Rekam Medis" showBrand />
         <main className="flex-1 p-4 md:p-6">
           <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-sm text-slate-400">
-            Registrasi tidak ditemukan.{' '}
-            <Link href="/rekam-medis" className="text-teal-600 font-medium">Kembali ke daftar</Link>
+            {loading ? 'Memuat data…' : (
+              <>Registrasi tidak ditemukan.{' '}
+              <Link href="/rekam-medis" className="text-teal-600 font-medium">Kembali ke daftar</Link></>
+            )}
           </div>
         </main>
       </>

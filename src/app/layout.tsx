@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
+import { RootProviders } from "@/components/layout/RootProviders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="beforeInteractive"
         >{`(function(){try{var t=localStorage.getItem('dokter-pintar-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`}</Script>
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full"><RootProviders>{children}</RootProviders></body>
     </html>
   );
 }

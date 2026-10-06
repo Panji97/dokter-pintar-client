@@ -1,51 +1,38 @@
 /**
- * Auth mock — berjalan penuh di client (localStorage).
+ * Auth via Strapi (users-permissions) — menggantikan mock localStorage.
  *
- * Mendukung login & registrasi via Email atau Nomor HP, login Google (mock),
- * serta lupa/reset kata sandi via kode OTP (ditampilkan di layar untuk demo,
- * karena belum ada backend SMS/email).
- *
- * Ketika backend Strapi 5 siap, cukup ganti implementasi fungsi-fungsi di file
- * ini tanpa mengubah pemanggil di halaman.
+ * - Login: POST /api/auth/local, JWT disimpan ganda (localStorage + cookie)
+ *   seperti hris-client-sakai, sesi app di localStorage 'dokter-pintar-session'.
+ * - Role aplikasi dibaca dari field `appRole` user Strapi.
+ * - Lupa kata sandi: POST /api/auth/forgot-password lalu
+ *   POST /api/auth/reset-password (kode dari email).
+ * - Login Google tidak tersedia — memakai email + kata sandi.
  */
+
+import {
+  getLocalStorage,
+  setLocalStorage,
+  removeLocalStorage,
+  setCookie,
+  eraseCookie,
+} from './storage';
+import { STRAPI_SESSION_EVENT } from './strapi';
+
+export interface SessionFaskes {
+  documentId: string;
+  name: string;
+}
 
 export interface Session {
   name: string;
   email: string;
   role: string;
+  faskes: SessionFaskes | null;
   loginAt: string;
 }
 
-export type AuthProvider = 'email' | 'phone' | 'google';
-
-export interface AuthUser {
-  name: string;
-  email: string;
-  phone: string;
-  /** Hash kata sandi (mock). Kosong untuk akun Google murni. */
-  passwordHash: string;
-  provider: AuthProvider;
-  role: string;
-  createdAt: string;
-}
-
 const SESSION_KEY = 'dokter-pintar-session';
-const USERS_KEY = 'dokter-pintar-users';
-const OTP_KEY = 'dokter-pintar-reset-otps';
-const OTP_TTL_MS = 10 * 60 * 1000; // 10 menit
-
-interface ResetOtp {
-  key: string;
-  code: string;
-  expiresAt: number;
-}
-
-/** Hash sederhana untuk mock — BUKAN keamanan nyata, hanya agar tidak plain-text. */
-function hashPassword(pw: string): string {
-  let h = 5381;
-  for (let i = 0; i < pw.length; i++) h = ((h << 5) + h + pw.charCodeAt(i)) >>> 0;
-  return `mock$${h.toString(36)}$${pw.length}`;
-}
+const baseUrl = () => process.env.NEXT_PUBLIC_STRAPI_URL ?? '';
 
 /** Normalisasi nomor HP Indonesia ke format 62xxxxxxxxxx. '' bila tidak valid. */
 export function normalizePhone(raw: string): string {
@@ -58,66 +45,7 @@ export function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
 }
 
-function seedUsers(): AuthUser[] {
-  const at = new Date().toISOString();
-  return [
-    {
-      name: 'Admin FasKes',
-      email: 'admin@dokterpintar.id',
-      phone: '6281234567890',
-      passwordHash: hashPassword('dokter123'),
-      provider: 'email',
-      role: 'Administrator',
-      createdAt: at,
-    },
-    {
-      name: 'Drg. Putri Andini',
-      email: 'dokter@dokterpintar.id',
-      phone: '6281298765432',
-      passwordHash: hashPassword('dokter123'),
-      provider: 'email',
-      role: 'Dokter Gigi',
-      createdAt: at,
-    },
-  ];
-}
-
-function loadUsers(): AuthUser[] {
-  if (typeof window === 'undefined') return seedUsers();
-  try {
-    const raw = window.localStorage.getItem(USERS_KEY);
-    if (!raw) {
-      const seed = seedUsers();
-      window.localStorage.setItem(USERS_KEY, JSON.stringify(seed));
-      return seed;
-    }
-    return JSON.parse(raw) as AuthUser[];
-  } catch {
-    return seedUsers();
-  }
-}
-
-function saveUsers(users: AuthUser[]): void {
-  try {
-    window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  } catch {
-    /* abaikan */
-  }
-}
-
-/** Cari user berdasarkan email ATAU nomor HP. */
-export function findUser(identifier: string): AuthUser | null {
-  const id = identifier.trim();
-  if (!id) return null;
-  const users = loadUsers();
-  const phone = normalizePhone(id);
-  return (
-    users.find((u) => u.email.toLowerCase() === id.toLowerCase()) ??
-    (phone ? (users.find((u) => u.phone === phone) ?? null) : null)
-  );
-}
-
-/** Ambil sesi aktif. null jika belum login (atau di server, karena localStorage). */
+/** Ambil sesi aktif. null jika belum login. */
 export function getSession(): Session | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -129,11 +57,17 @@ export function getSession(): Session | null {
   }
 }
 
-function startSession(user: AuthUser): Session {
+function startSession(
+  name: string,
+  email: string,
+  role: string,
+  faskes: SessionFaskes | null,
+): Session {
   const session: Session = {
-    name: user.name,
-    email: user.email,
-    role: user.role,
+    name,
+    email,
+    role,
+    faskes,
     loginAt: new Date().toISOString(),
   };
   try {
@@ -141,7 +75,14 @@ function startSession(user: AuthUser): Session {
   } catch {
     /* kuota penuh — sesi tetap berlaku di memori halaman ini */
   }
+  notifySessionChanged();
   return session;
+}
+
+function notifySessionChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(STRAPI_SESSION_EVENT));
+  }
 }
 
 export function logout(): void {
@@ -150,6 +91,14 @@ export function logout(): void {
   } catch {
     /* abaikan */
   }
+  try {
+    removeLocalStorage('jwt');
+    removeLocalStorage('user');
+    eraseCookie('jwt');
+  } catch {
+    /* abaikan */
+  }
+  notifySessionChanged();
 }
 
 /** Hasil operasi auth yang bisa gagal dengan pesan ramah. */
@@ -157,164 +106,224 @@ export type AuthResult =
   | { ok: true; session: Session }
   | { ok: false; error: string };
 
-/** Login dengan Email atau Nomor HP + kata sandi. */
-export function login(identifier: string, password: string): Session | null {
-  const res = loginDetailed(identifier, password);
-  return res.ok ? res.session : null;
+interface StrapiAuthPayload {
+  jwt?: string;
+  user?: { username?: string; email?: string; appRole?: string };
+  error?: { message?: string };
 }
 
-export function loginDetailed(identifier: string, password: string): AuthResult {
+async function strapiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await res.json()) as StrapiAuthPayload;
+    return body?.error?.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+interface StrapiMe {
+  username?: string;
+  email?: string;
+  appRole?: string;
+  faskes?: { documentId?: string; name?: string } | null;
+}
+
+/** Login dengan Email + kata sandi ke Strapi. */
+export async function loginDetailed(
+  identifier: string,
+  password: string,
+): Promise<AuthResult> {
   if (!identifier.trim() || !password) {
-    return { ok: false, error: 'Email/nomor HP dan kata sandi wajib diisi.' };
+    return { ok: false, error: 'Email dan kata sandi wajib diisi.' };
   }
-  const user = findUser(identifier);
-  if (!user) {
-    return { ok: false, error: 'Akun tidak ditemukan. Periksa kembali atau daftar dulu.' };
+  if (!isEmail(identifier)) {
+    return { ok: false, error: 'Masuk memakai email terdaftar.' };
   }
-  if (!user.passwordHash) {
-    return { ok: false, error: 'Akun ini terdaftar via Google — masuk dengan tombol Google.' };
+  try {
+    const res = await fetch(`${baseUrl()}/api/auth/local`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: identifier.trim(), password }),
+    });
+    const body = (await res.json()) as StrapiAuthPayload;
+    if (!res.ok || !body.jwt || !body.user) {
+      return { ok: false, error: body?.error?.message || 'Email atau kata sandi salah.' };
+    }
+
+    // Ambil profil lengkap (termasuk appRole + faskes).
+    const meRes = await fetch(`${baseUrl()}/api/users/me?populate=faskes`, {
+      headers: { Authorization: `Bearer ${body.jwt}` },
+    });
+    const me = (await meRes.json()) as StrapiMe;
+    if (!meRes.ok || !me.faskes?.documentId) {
+      return { ok: false, error: 'Akun belum terikat ke faskes. Hubungi admin faskes.' };
+    }
+
+    setCookie('jwt', body.jwt, 7);
+    setLocalStorage('jwt', body.jwt);
+    setLocalStorage('user', JSON.stringify(me));
+
+    const name = me.username || body.user.username || identifier.trim();
+    const email = me.email || body.user.email || identifier.trim();
+    const role = me.appRole || 'Pengguna';
+    const faskes = { documentId: me.faskes.documentId, name: me.faskes.name ?? '' };
+    return { ok: true, session: startSession(name, email, role, faskes) };
+  } catch {
+    return { ok: false, error: 'Tidak dapat terhubung. Periksa koneksi internet.' };
   }
-  if (user.passwordHash !== hashPassword(password)) {
-    return { ok: false, error: 'Kata sandi salah. Coba lagi.' };
-  }
-  return { ok: true, session: startSession(user) };
 }
 
 export interface RegisterInput {
+  faskesName: string;
+  address: string;
+  phone: string;
   name: string;
   email: string;
-  phone: string;
   password: string;
 }
 
-/** Registrasi akun baru via Email dan/atau Nomor HP. */
-export function register(input: RegisterInput): AuthResult {
+/**
+ * Daftar faskes baru + akun Admin Faskes (satu panggilan ke POST /api/faskes/register).
+ */
+export async function register(input: RegisterInput): Promise<AuthResult> {
+  const faskesName = input.faskesName.trim();
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
-  const phone = normalizePhone(input.phone);
+  if (faskesName.length < 3) {
+    return { ok: false, error: 'Nama faskes minimal 3 karakter.' };
+  }
   if (name.length < 3) {
-    return { ok: false, error: 'Nama lengkap minimal 3 karakter.' };
+    return { ok: false, error: 'Nama admin minimal 3 karakter.' };
   }
-  if (!email && !phone) {
-    return { ok: false, error: 'Isi email atau nomor HP (salah satu wajib ada).' };
-  }
-  if (email && !isEmail(email)) {
-    return { ok: false, error: 'Format email tidak valid.' };
-  }
-  if (input.phone.trim() && !phone) {
-    return { ok: false, error: 'Nomor HP tidak valid (contoh: 0812xxxxxxx).' };
+  if (!email || !isEmail(email)) {
+    return { ok: false, error: 'Email valid wajib diisi untuk pendaftaran.' };
   }
   if (input.password.length < 6) {
     return { ok: false, error: 'Kata sandi minimal 6 karakter.' };
   }
-  const users = loadUsers();
-  if (email && users.some((u) => u.email.toLowerCase() === email)) {
-    return { ok: false, error: 'Email sudah terdaftar. Masuk atau reset kata sandi.' };
-  }
-  if (phone && users.some((u) => u.phone === phone)) {
-    return { ok: false, error: 'Nomor HP sudah terdaftar. Masuk atau reset kata sandi.' };
-  }
-  const user: AuthUser = {
-    name,
-    email,
-    phone,
-    passwordHash: hashPassword(input.password),
-    provider: email ? 'email' : 'phone',
-    role: 'Pengguna',
-    createdAt: new Date().toISOString(),
-  };
-  users.push(user);
-  saveUsers(users);
-  return { ok: true, session: startSession(user) };
-}
-
-/**
- * Login Google (MOCK untuk demo — tanpa OAuth sungguhan).
- * Membuat/memakai akun demo Google lalu memulai sesi.
- * Ganti dengan Google Identity Services + Strapi saat backend siap.
- */
-export function loginWithGoogle(): Session {
-  const users = loadUsers();
-  const email = 'pengguna.google@gmail.com';
-  let user = users.find((u) => u.email === email);
-  if (!user) {
-    user = {
-      name: 'Pengguna Google',
-      email,
-      phone: '',
-      passwordHash: '',
-      provider: 'google',
-      role: 'Pengguna',
-      createdAt: new Date().toISOString(),
+  try {
+    const res = await fetch(`${baseUrl()}/api/faskes/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        faskes: { name: faskesName, address: input.address.trim(), phone: input.phone.trim() },
+        admin: { name, email, password: input.password },
+      }),
+    });
+    const body = (await res.json()) as {
+      data?: {
+        jwt?: string;
+        faskes?: { documentId?: string; name?: string };
+        user?: { username?: string; email?: string; appRole?: string };
+      };
+      error?: { message?: string };
     };
-    users.push(user);
-    saveUsers(users);
+    if (!res.ok || !body.data?.jwt || !body.data?.user || !body.data?.faskes?.documentId) {
+      return { ok: false, error: body?.error?.message || 'Pendaftaran gagal.' };
+    }
+    const { jwt, user } = body.data;
+    const faskesId = body.data.faskes.documentId as string;
+    const faskesNameOut = body.data.faskes.name ?? faskesName;
+    setCookie('jwt', jwt, 7);
+    setLocalStorage('jwt', jwt);
+    setLocalStorage('user', JSON.stringify(user));
+    return {
+      ok: true,
+      session: startSession(
+        user.username || name,
+        user.email || email,
+        user.appRole || 'Admin Faskes',
+        { documentId: faskesId, name: faskesNameOut },
+      ),
+    };
+  } catch {
+    return { ok: false, error: 'Tidak dapat terhubung. Periksa koneksi internet.' };
   }
-  return startSession(user);
 }
 
-/** Minta kode OTP reset ke Email atau Nomor HP terdaftar. Mengembalikan kode (demo). */
-export function requestPasswordReset(
-  identifier: string
-): { ok: true; code: string; channel: 'email' | 'sms' } | { ok: false; error: string } {
-  const user = findUser(identifier);
-  if (!user) {
-    return { ok: false, error: 'Akun tidak ditemukan untuk email/nomor tersebut.' };
+/** Minta tautan reset via email Strapi. */
+export async function requestPasswordReset(
+  identifier: string,
+): Promise<{ ok: true; channel: 'email' } | { ok: false; error: string }> {
+  const email = identifier.trim();
+  if (!isEmail(email)) {
+    return { ok: false, error: 'Masukkan email terdaftar untuk reset kata sandi.' };
   }
-  if (!user.passwordHash) {
-    return { ok: false, error: 'Akun ini memakai login Google — tidak perlu kata sandi.' };
-  }
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const key = user.email || user.phone;
-  let otps: ResetOtp[] = [];
   try {
-    otps = JSON.parse(window.localStorage.getItem(OTP_KEY) ?? '[]') as ResetOtp[];
+    const res = await fetch(`${baseUrl()}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      return { ok: false, error: await strapiError(res, 'Gagal mengirim tautan reset.') };
+    }
+    return { ok: true, channel: 'email' };
   } catch {
-    otps = [];
+    return { ok: false, error: 'Tidak dapat terhubung. Periksa koneksi internet.' };
   }
-  otps = otps.filter((o) => o.key !== key);
-  otps.push({ key, code, expiresAt: Date.now() + OTP_TTL_MS });
-  try {
-    window.localStorage.setItem(OTP_KEY, JSON.stringify(otps));
-  } catch {
-    /* abaikan */
-  }
-  return { ok: true, code, channel: user.email ? 'email' : 'sms' };
 }
 
-/** Verifikasi OTP lalu ganti kata sandi. */
-export function resetPassword(identifier: string, code: string, newPassword: string): AuthResult {
+/** Reset kata sandi dengan kode dari email + kata sandi baru. */
+export async function resetPassword(
+  code: string,
+  newPassword: string,
+  confirmPassword: string,
+): Promise<AuthResult> {
+  if (!code.trim()) {
+    return { ok: false, error: 'Kode verifikasi dari email wajib diisi.' };
+  }
   if (newPassword.length < 6) {
     return { ok: false, error: 'Kata sandi baru minimal 6 karakter.' };
   }
-  const user = findUser(identifier);
-  if (!user || !user.passwordHash) {
-    return { ok: false, error: 'Akun tidak valid untuk reset kata sandi.' };
+  if (newPassword !== confirmPassword) {
+    return { ok: false, error: 'Konfirmasi kata sandi tidak sama.' };
   }
-  const key = user.email || user.phone;
-  let otps: ResetOtp[] = [];
   try {
-    otps = JSON.parse(window.localStorage.getItem(OTP_KEY) ?? '[]') as ResetOtp[];
+    const res = await fetch(`${baseUrl()}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: code.trim(),
+        password: newPassword,
+        passwordConfirmation: confirmPassword,
+      }),
+    });
+    const body = (await res.json()) as StrapiAuthPayload;
+    if (!res.ok || !body.jwt || !body.user) {
+      return { ok: false, error: body?.error?.message || 'Kode salah atau kedaluwarsa.' };
+    }
+    setCookie('jwt', body.jwt, 7);
+    setLocalStorage('jwt', body.jwt);
+    setLocalStorage('user', JSON.stringify(body.user));
+    notifySessionChanged();
+    let faskes: SessionFaskes | null = null;
+    try {
+      const meRes = await fetch(`${baseUrl()}/api/users/me?populate=faskes`, {
+        headers: { Authorization: `Bearer ${body.jwt}` },
+      });
+      const me = (await meRes.json()) as StrapiMe;
+      if (me.faskes?.documentId) {
+        faskes = { documentId: me.faskes.documentId, name: me.faskes.name ?? '' };
+      }
+    } catch {
+      /* abaikan — sesi tanpa faskes */
+    }
+    return {
+      ok: true,
+      session: startSession(
+        body.user.username || '',
+        body.user.email || '',
+        body.user.appRole || 'Pengguna',
+        faskes,
+      ),
+    };
   } catch {
-    otps = [];
+    return { ok: false, error: 'Tidak dapat terhubung. Periksa koneksi internet.' };
   }
-  const otp = otps.find((o) => o.key === key);
-  if (!otp || otp.code !== code.trim()) {
-    return { ok: false, error: 'Kode verifikasi salah.' };
-  }
-  if (Date.now() > otp.expiresAt) {
-    return { ok: false, error: 'Kode kedaluwarsa. Minta kode baru.' };
-  }
-  const users = loadUsers().map((u) =>
-    u.email === user.email && u.phone === user.phone
-      ? { ...u, passwordHash: hashPassword(newPassword) }
-      : u
-  );
-  saveUsers(users);
-  try {
-    window.localStorage.setItem(OTP_KEY, JSON.stringify(otps.filter((o) => o.key !== key)));
-  } catch {
-    /* abaikan */
-  }
-  return { ok: true, session: startSession({ ...user, passwordHash: hashPassword(newPassword) }) };
+}
+
+/** Baca JWT Strapi tersimpan (untuk fetcher non-hook). */
+export function getStrapiJwt(): string | null {
+  return getLocalStorage('jwt');
 }

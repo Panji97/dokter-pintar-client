@@ -41,10 +41,16 @@ function shiftDate(refDate: string, y: number, m: number, d: number) {
 }
 
 export default function RegistrasiPage() {
-  const { state, addPatient, addRegistration } = useClinicStore();
+  const { state, loading, refresh, addPatient, addRegistration } = useClinicStore();
   const { queueOpen, setQueueOpen, setQueueSheetOpen, toast } = useShell();
   const [tab, setTab] = useState<Tab>("baru");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (state.rooms.length === 0 && !loading) {
+      refresh();
+    }
+  }, [state.rooms.length, loading, refresh]);
 
   /** Tampilkan rightbar antrean agar data registrasi baru terlihat. */
   const showQueue = () => {
@@ -69,10 +75,10 @@ export default function RegistrasiPage() {
     regDate: todayStr,
     address: "",
     nik: "",
-    group: "Umum",
-    room: "Poli Gigi 1",
+    group: "",
+    room: "",
     serviceType: "",
-    doctor: "dr. Zaela",
+    doctor: "",
   });
   const age = calcAge(form.birthDate, form.regDate || todayStr);
 
@@ -89,13 +95,21 @@ export default function RegistrasiPage() {
   };
 
   const rooms = state.rooms.map((r) => r.name);
+  const patientGroupOptions = useMemo(
+    () => state.patientGroups.map((g) => g.name),
+    [state.patientGroups],
+  );
   // Daftar pilihan Pelayanan dari master tarif (Pengaturan → Pelayanan).
   const serviceOptions = useMemo(
-    () =>
-      state.services.length > 0
-        ? state.services.map((s) => s.name)
-        : ["Pelayanan Dokter Gigi Umum"],
+    () => state.services.map((s) => s.name),
     [state.services],
+  );
+  const doctorOptions = useMemo(
+    () =>
+      state.staff.filter(
+        (s) => s.role === "Dokter Gigi" || s.role === "Dokter Umum",
+      ),
+    [state.staff],
   );
   const filteredPatients = useMemo(() => {
     const q = search.toLowerCase();
@@ -120,44 +134,77 @@ export default function RegistrasiPage() {
     filteredPatients.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(safePage * PAGE_SIZE, filteredPatients.length);
 
-  const submitNew = () => {
-    if (!form.name || !form.gender) return;
-    const patient = addPatient({
-      name: form.name,
-      title: form.title || undefined,
-      nik: form.nik || "-",
-      birthDate: form.birthDate || form.regDate,
-      gender: form.gender as "L" | "P",
-      phone: "",
-      address: form.address,
-      bloodType: "-",
-      allergies: [],
-    });
-    addRegistration({
-      patientId: patient.id,
-      patientName: patient.name,
-      group: form.group as never,
-      serviceType: form.serviceType || serviceOptions[0],
-      room: form.room,
-      doctor: form.doctor,
-      regDate: form.regDate
-        ? new Date(`${form.regDate}T00:00:00`).toISOString()
-        : undefined,
-    });
-    // Tetap di halaman registrasi — data tampil di rightbar antrean.
-    toast(
-      `${patient.name} berhasil diregistrasi ke ${form.room}. Data antrean tampil di panel kanan.`,
-    );
-    setForm((f) => ({
-      ...f,
-      title: "",
-      name: "",
-      gender: "",
-      birthDate: "",
-      address: "",
-      nik: "",
-    }));
-    showQueue();
+  const [saving, setSaving] = useState(false);
+
+  const submitNew = async () => {
+    if (!form.name.trim()) {
+      toast("Nama pasien wajib diisi.");
+      return;
+    }
+    if (!form.gender) {
+      toast("Jenis kelamin wajib dipilih.");
+      return;
+    }
+    if (!form.group) {
+      toast("Grup pasien wajib dipilih.");
+      return;
+    }
+    if (!form.room) {
+      toast("Poli wajib dipilih.");
+      return;
+    }
+    if (!form.serviceType) {
+      toast("Pelayanan wajib dipilih.");
+      return;
+    }
+    if (!form.doctor) {
+      toast("Dokter pemeriksa wajib dipilih.");
+      return;
+    }
+    if (saving) return;
+    setSaving(true);
+    try {
+      const patient = await addPatient({
+        name: form.name,
+        title: form.title || undefined,
+        nik: form.nik || "-",
+        birthDate: form.birthDate || form.regDate,
+        gender: form.gender as "L" | "P",
+        phone: "",
+        address: form.address,
+        bloodType: "-",
+        allergies: [],
+      });
+      await addRegistration({
+        patientId: patient.id,
+        patientName: patient.name,
+        group: form.group as never,
+        serviceType: form.serviceType,
+        room: form.room,
+        doctor: form.doctor,
+        regDate: form.regDate
+          ? new Date(`${form.regDate}T00:00:00`).toISOString()
+          : undefined,
+      });
+      // Tetap di halaman registrasi — data tampil di rightbar antrean.
+      toast(
+        `${patient.name} berhasil diregistrasi ke ${form.room}. Data antrean tampil di panel kanan.`,
+      );
+      setForm((f) => ({
+        ...f,
+        title: "",
+        name: "",
+        gender: "",
+        birthDate: "",
+        address: "",
+        nik: "",
+      }));
+      showQueue();
+    } catch (err) {
+      toast(`Gagal menyimpan: ${err instanceof Error ? err.message : 'periksa koneksi internet'}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Modal registrasi cepat per pasien (tombol Registrasi di tiap baris)
@@ -165,44 +212,61 @@ export default function RegistrasiPage() {
     null,
   );
   const [modalForm, setModalForm] = useState({
-    group: "Umum",
-    room: "Poli Gigi 1",
+    group: "",
+    room: "",
     serviceType: "",
-    doctor: "dr. Zaela",
+    doctor: "",
   });
   const regModalPatient = regModalPatientId
     ? (state.patients.find((x) => x.id === regModalPatientId) ?? null)
     : null;
 
   const openRegModal = (patientId: string) => {
-    const doctors = state.staff.filter(
-      (s) => s.role === "Dokter Gigi" || s.role === "Dokter Umum",
-    );
     setModalForm({
-      group: "Umum",
-      room: state.rooms[0]?.name ?? "Poli Gigi 1",
-      serviceType: state.services[0]?.name ?? "Pelayanan Dokter Gigi Umum",
-      doctor: doctors[0]?.name ?? "dr. Zaela",
+      group: "",
+      room: "",
+      serviceType: "",
+      doctor: "",
     });
     setRegModalPatientId(patientId);
   };
 
-  const submitModal = () => {
+  const submitModal = async () => {
     if (!regModalPatient) return;
-    addRegistration({
-      patientId: regModalPatient.id,
-      patientName: regModalPatient.name,
-      group: modalForm.group as never,
-      serviceType: modalForm.serviceType || serviceOptions[0],
-      room: modalForm.room,
-      doctor: modalForm.doctor,
-    });
-    // Tetap di halaman registrasi — data tampil di rightbar antrean.
-    toast(
-      `${regModalPatient.name} berhasil diregistrasi ke ${modalForm.room}. Data antrean tampil di panel kanan.`,
-    );
-    setRegModalPatientId(null);
-    showQueue();
+    if (!modalForm.group) {
+      toast("Grup pasien wajib dipilih.");
+      return;
+    }
+    if (!modalForm.room) {
+      toast("Poli wajib dipilih.");
+      return;
+    }
+    if (!modalForm.serviceType) {
+      toast("Pelayanan wajib dipilih.");
+      return;
+    }
+    if (!modalForm.doctor) {
+      toast("Dokter pemeriksa wajib dipilih.");
+      return;
+    }
+    try {
+      await addRegistration({
+        patientId: regModalPatient.id,
+        patientName: regModalPatient.name,
+        group: modalForm.group as never,
+        serviceType: modalForm.serviceType,
+        room: modalForm.room,
+        doctor: modalForm.doctor,
+      });
+      // Tetap di halaman registrasi — data tampil di rightbar antrean.
+      toast(
+        `${regModalPatient.name} berhasil diregistrasi ke ${modalForm.room}. Data antrean tampil di panel kanan.`,
+      );
+      setRegModalPatientId(null);
+      showQueue();
+    } catch (err) {
+      toast(`Gagal menyimpan: ${err instanceof Error ? err.message : 'periksa koneksi internet'}`);
+    }
   };
 
   // Tutup modal dengan tombol Escape
@@ -277,13 +341,13 @@ export default function RegistrasiPage() {
                         }
                         className={inputCls}
                       >
-                        {[
-                          "Umum",
-                          "BPJS Kesehatan",
-                          "Asuransi Swasta",
-                          "Member",
-                        ].map((g) => (
-                          <option key={g}>{g}</option>
+                        <option value="">
+                          {loading && patientGroupOptions.length === 0
+                            ? "Memuat Grup Pasien..."
+                            : "Pilih Grup Pasien"}
+                        </option>
+                        {patientGroupOptions.map((g) => (
+                          <option key={g} value={g}>{g}</option>
                         ))}
                       </select>
                     </div>
@@ -298,8 +362,13 @@ export default function RegistrasiPage() {
                         }
                         className={inputCls}
                       >
+                        <option value="">
+                          {loading && rooms.length === 0
+                            ? "Memuat Poli..."
+                            : "Pilih Poli"}
+                        </option>
                         {rooms.map((r) => (
-                          <option key={r}>{r}</option>
+                          <option key={r} value={r}>{r}</option>
                         ))}
                       </select>
                     </div>
@@ -308,14 +377,19 @@ export default function RegistrasiPage() {
                         Pelayanan <span className="text-rose-500">*</span>
                       </label>
                       <select
-                        value={form.serviceType || serviceOptions[0]}
+                        value={form.serviceType}
                         onChange={(e) =>
                           setForm({ ...form, serviceType: e.target.value })
                         }
                         className={inputCls}
                       >
+                        <option value="">
+                          {loading && serviceOptions.length === 0
+                            ? "Memuat Pelayanan..."
+                            : "Pilih Pelayanan"}
+                        </option>
                         {serviceOptions.map((s) => (
-                          <option key={s}>{s}</option>
+                          <option key={s} value={s}>{s}</option>
                         ))}
                       </select>
                     </div>
@@ -331,15 +405,14 @@ export default function RegistrasiPage() {
                         }
                         className={inputCls}
                       >
-                        {state.staff
-                          .filter(
-                            (s) =>
-                              s.role === "Dokter Gigi" ||
-                              s.role === "Dokter Umum",
-                          )
-                          .map((s) => (
-                            <option key={s.id}>{s.name}</option>
-                          ))}
+                        <option value="">
+                          {loading && doctorOptions.length === 0
+                            ? "Memuat Dokter..."
+                            : "Pilih Dokter"}
+                        </option>
+                        {doctorOptions.map((s) => (
+                          <option key={s.id} value={s.name}>{s.name}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -477,9 +550,10 @@ export default function RegistrasiPage() {
                 <div className="flex justify-end">
                   <button
                     onClick={submitNew}
-                    className="px-5 py-2.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition"
+                    disabled={saving}
+                    className="px-5 py-2.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition disabled:opacity-60"
                   >
-                    Simpan
+                    {saving ? "Menyimpan…" : "Simpan"}
                   </button>
                 </div>
               </div>
@@ -642,13 +716,13 @@ export default function RegistrasiPage() {
                   }
                   className={inputCls}
                 >
-                  {[
-                    "Umum",
-                    "BPJS Kesehatan",
-                    "Asuransi Swasta",
-                    "Member",
-                  ].map((g) => (
-                    <option key={g}>{g}</option>
+                  <option value="">
+                    {loading && patientGroupOptions.length === 0
+                      ? "Memuat Grup Pasien..."
+                      : "Pilih Grup Pasien"}
+                  </option>
+                  {patientGroupOptions.map((g) => (
+                    <option key={g} value={g}>{g}</option>
                   ))}
                 </select>
               </div>
@@ -661,22 +735,32 @@ export default function RegistrasiPage() {
                   }
                   className={inputCls}
                 >
+                  <option value="">
+                    {loading && rooms.length === 0
+                      ? "Memuat Poli..."
+                      : "Pilih Poli"}
+                  </option>
                   {rooms.map((r) => (
-                    <option key={r}>{r}</option>
+                    <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className={labelCls}>Pelayanan</label>
                 <select
-                  value={modalForm.serviceType || serviceOptions[0]}
+                  value={modalForm.serviceType}
                   onChange={(e) =>
                     setModalForm({ ...modalForm, serviceType: e.target.value })
                   }
                   className={inputCls}
                 >
+                  <option value="">
+                    {loading && serviceOptions.length === 0
+                      ? "Memuat Pelayanan..."
+                      : "Pilih Pelayanan"}
+                  </option>
                   {serviceOptions.map((s) => (
-                    <option key={s}>{s}</option>
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
@@ -689,14 +773,14 @@ export default function RegistrasiPage() {
                   }
                   className={inputCls}
                 >
-                  {state.staff
-                    .filter(
-                      (s) =>
-                        s.role === "Dokter Gigi" || s.role === "Dokter Umum",
-                    )
-                    .map((s) => (
-                      <option key={s.id}>{s.name}</option>
-                    ))}
+                  <option value="">
+                    {loading && doctorOptions.length === 0
+                      ? "Memuat Dokter..."
+                      : "Pilih Dokter"}
+                  </option>
+                  {doctorOptions.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
                 </select>
               </div>
             </div>

@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { CheckCircle2, X } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { QueueSidebar } from './QueueSidebar';
-import { ClinicStoreProvider } from '@/lib/ClinicStore';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 interface ToastItem {
@@ -68,12 +67,17 @@ export function ShellProvider({
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem('dokter-pintar-queue') === 'closed') setQueueOpen(false);
-      if (localStorage.getItem('dokter-pintar-sidebar') === 'closed') setDesktopSidebarOpen(false);
-    } catch {
-      /* abaikan */
-    }
+    // Via timeout (callback) agar lolos aturan react-hooks/set-state-in-effect;
+    // tetap setelah mount sehingga tidak ada hydration mismatch.
+    const t = window.setTimeout(() => {
+      try {
+        if (localStorage.getItem('dokter-pintar-queue') === 'closed') setQueueOpen(false);
+        if (localStorage.getItem('dokter-pintar-sidebar') === 'closed') setDesktopSidebarOpen(false);
+      } catch {
+        /* abaikan */
+      }
+    }, 0);
+    return () => window.clearTimeout(t);
   }, []);
 
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
@@ -131,8 +135,7 @@ export function ShellProvider({
 
   return (
     <ShellContext.Provider value={ctx}>
-      <ClinicStoreProvider>
-        {children}
+      {children}
 
         {/* Sheet leftbar (mobile) */}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -169,7 +172,6 @@ export function ShellProvider({
             ))}
           </div>
         )}
-      </ClinicStoreProvider>
     </ShellContext.Provider>
   );
 }

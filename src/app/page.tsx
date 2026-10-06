@@ -168,7 +168,7 @@ const faqs = [
     a: 'Umumnya 1–3 hari kerja. Anda cukup mendaftarkan akun, mengatur daftar poli, dokter, dan tarif layanan — setelah itu FasKes sudah bisa menerima pasien. Tim kami mendampingi lewat WhatsApp selama masa onboarding.',
   },
   {
-    q: 'Apakah perlu membeli server atau instalasi khusus?',
+    q: 'Apakah perlu perangkat atau instalasi khusus?',
     a: 'Tidak perlu. Dokter Pintar 100% berjalan di cloud — cukup buka lewat browser di HP, tablet, atau komputer yang sudah Anda miliki. Tidak ada biaya perangkat tambahan.',
   },
   {
@@ -291,7 +291,7 @@ export default function LandingPage() {
             </div>
 
             <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2">
-              {['Coba gratis 14 hari', 'Tanpa install server', 'Siap SATUSEHAT & BPJS'].map((t) => (
+              {['Coba gratis 14 hari', 'Tanpa instalasi khusus', 'Siap SATUSEHAT & BPJS'].map((t) => (
                 <li key={t} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400">
                   <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                   {t}

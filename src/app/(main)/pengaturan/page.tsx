@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore } from '@/lib/ClinicStore';
+import { FaskesInfo } from '@/components/pengaturan/FaskesInfo';
+import { StaffAccounts } from '@/components/pengaturan/StaffAccounts';
 import {
   Settings, Globe, Save, Check, Plus, Trash2, UserPlus, CalendarClock, Building2, Users, Stethoscope,
 } from 'lucide-react';
@@ -20,13 +22,7 @@ export default function PengaturanPage() {
   const [extTab, setExtTab] = useState<ExtTab>('satusehat');
   const [saved, setSaved] = useState(false);
   const [newRoom, setNewRoom] = useState('');
-  const [newStaff, setNewStaff] = useState({ name: '', role: 'Dokter Gigi' as const, room: 'Poli Gigi 1' });
-
-  // Profil faskes
-  const [clinicName, setClinicName] = useState('Dokter Pintar');
-  const [address, setAddress] = useState('Jl. Rasuna Said Blok X-5, Kuningan, Jakarta Selatan');
-  const [phone, setPhone] = useState('021-57998945');
-  const [email, setEmail] = useState('faskes@dokterpintar.com');
+  const [newStaff, setNewStaff] = useState({ name: '', role: 'Dokter Gigi' as const, room: 'Poli Gigi & Mulut' });
 
   // SATUSEHAT
   const [ssId, setSsId] = useState('11000030001');
@@ -326,7 +322,7 @@ export default function PengaturanPage() {
                       {['Dokter Gigi', 'Dokter Umum', 'Perawat', 'Apoteker', 'Kasir', 'Admin'].map((r) => <option key={r}>{r}</option>)}
                     </select>
                     <button
-                      onClick={() => { if (newStaff.name.trim()) { addStaff({ ...newStaff, name: newStaff.name.trim(), active: true }); setNewStaff({ name: '', role: 'Dokter Gigi', room: 'Poli Gigi 1' }); } }}
+                      onClick={() => { if (newStaff.name.trim()) { addStaff({ ...newStaff, name: newStaff.name.trim(), active: true }); setNewStaff({ name: '', role: 'Dokter Gigi', room: 'Poli Gigi & Mulut' }); } }}
                       className="inline-flex items-center justify-center gap-1 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-medium px-3 py-2 rounded-lg transition"
                     >
                       <UserPlus className="w-3.5 h-3.5" /> Tambah
@@ -394,48 +390,10 @@ export default function PengaturanPage() {
             )}
 
             {/* FasKes */}
-            {sysTab === 'faskes' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm space-y-4">
-                <div>
-                  <label className={labelCls}>Nama FasKes</label>
-                  <input value={clinicName} onChange={(e) => setClinicName(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Alamat</label>
-                  <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Telepon</label>
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Email</label>
-                    <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
-                  </div>
-                </div>
-                <button onClick={flash} className="inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium px-4 py-2.5 sm:py-2 rounded-lg shadow-sm transition w-full sm:w-auto">
-                  {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                  {saved ? 'Tersimpan!' : 'Simpan Perubahan'}
-                </button>
-              </div>
-            )}
+            {sysTab === 'faskes' && <FaskesInfo />}
 
             {/* Akun */}
-            {sysTab === 'akun' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm space-y-4">
-                <h2 className="font-bold text-slate-800 text-sm">Akun Login FasKes</h2>
-                <div className="bg-slate-50 border border-slate-100 rounded-lg p-4 text-sm space-y-1">
-                  <div className="flex justify-between"><span className="text-slate-500">Username</span><span className="font-medium text-slate-800">dokterpintar</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">FasKes</span><span className="font-medium text-slate-800">Dokter Pintar</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Paket</span><span className="font-medium text-slate-800">Gigi & Mulut — Growth</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Pengguna</span><span className="font-medium text-slate-800">Tanpa batasan jumlah pengguna</span></div>
-                </div>
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
-                  Dokter Pintar terintegrasi SATUSEHAT, BPJS Kesehatan (PCare), iCare, dan Mobile JKN. Atur kredensial di tab Pengaturan Eksternal.
-                </div>
-              </div>
-            )}
+            {sysTab === 'akun' && <StaffAccounts />}
           </div>
         )}
 

@@ -64,7 +64,7 @@ export function AuthDivider() {
  */
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-dvh flex">
       {/* ============ Panel brand (lg+) ============ */}
       <div className="hidden lg:flex w-[44%] xl:w-[42%] bg-slate-950 text-slate-300 flex-col justify-between relative overflow-hidden">
         <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 w-72 h-72 rounded-full bg-teal-500/10 blur-3xl" />
@@ -113,8 +113,10 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ============ Kolom form ============ */}
-      <div className="flex-1 flex items-center justify-center px-4 py-10 bg-slate-50">
-        <div className="w-full max-w-sm">
+      {/* m-auto (bukan items-center) agar form yang lebih tinggi dari layar
+          tetap bisa di-scroll ke atas di HP. */}
+      <div className="flex-1 flex min-w-0 px-4 py-8 sm:py-10 bg-slate-50">
+        <div className="w-full max-w-sm m-auto">
           {/* Logo kecil untuk mobile */}
           <LogoLink className="lg:hidden flex items-center gap-3 mb-8 rounded-lg outline-none w-fit">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center shadow-[0_0_18px_rgba(45,212,191,0.45)]">

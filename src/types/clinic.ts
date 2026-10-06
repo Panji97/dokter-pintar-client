@@ -319,6 +319,13 @@ export interface Retur {
 }
 
 /* ============ SETTINGS ============ */
+export interface PatientGroupItem {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+}
+
 export interface Room {
   id: string;
   name: string;

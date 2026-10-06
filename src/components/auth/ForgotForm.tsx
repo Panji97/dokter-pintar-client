@@ -7,17 +7,16 @@ import { ArrowLeft, KeyRound, Lock, Send, UserRound } from 'lucide-react';
 import { requestPasswordReset, resetPassword, getSession } from '@/lib/auth';
 import { AuthShell } from './AuthShell';
 
-/** Lupa kata sandi — 2 langkah: minta kode OTP, lalu atur kata sandi baru. */
+/** Lupa kata sandi — 2 langkah via email: minta kode, lalu atur kata sandi baru. */
 export function ForgotForm() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [identifier, setIdentifier] = useState('');
   const [code, setCode] = useState('');
-  const [demoCode, setDemoCode] = useState('');
-  const [channel, setChannel] = useState<'email' | 'sms'>('email');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Sudah login? Langsung ke dashboard.
@@ -25,24 +24,22 @@ export function ForgotForm() {
     if (getSession()) router.replace('/dashboard');
   }, [router]);
 
-  const handleRequest = (e: React.FormEvent) => {
+  const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setInfo('');
     setSubmitting(true);
-    window.setTimeout(() => {
-      const res = requestPasswordReset(identifier);
-      setSubmitting(false);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setDemoCode(res.code);
-      setChannel(res.channel);
-      setStep(2);
-    }, 350);
+    const res = await requestPasswordReset(identifier);
+    setSubmitting(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setInfo('Tautan & kode verifikasi dikirim ke email Anda.');
+    setStep(2);
   };
 
-  const handleReset = (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (password !== confirm) {
@@ -50,19 +47,18 @@ export function ForgotForm() {
       return;
     }
     setSubmitting(true);
-    window.setTimeout(() => {
-      const res = resetPassword(identifier, code, password);
-      if (!res.ok) {
-        setError(res.error);
-        setSubmitting(false);
-        return;
-      }
-      router.replace('/dashboard');
-    }, 350);
+    const res = await resetPassword(code, password, confirm);
+    if (!res.ok) {
+      setError(res.error);
+      setSubmitting(false);
+      return;
+    }
+    router.replace('/dashboard');
   };
 
+  // text-base di HP agar iOS tidak auto-zoom saat fokus input.
   const inputCls =
-    'w-full pl-10 pr-4 py-2.5 text-sm bg-slate-100 rounded-xl border border-transparent focus:bg-white focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition placeholder:text-slate-400';
+    'w-full pl-10 pr-4 py-2.5 text-base sm:text-sm bg-slate-100 rounded-xl border border-transparent focus:bg-white focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition placeholder:text-slate-400';
 
   return (
     <AuthShell>
@@ -77,7 +73,7 @@ export function ForgotForm() {
       <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Lupa kata sandi</h1>
       <p className="mt-1.5 text-sm text-slate-500">
         {step === 1
-          ? 'Masukkan email atau nomor HP terdaftar untuk menerima kode verifikasi.'
+          ? 'Masukkan email terdaftar untuk menerima kode verifikasi.'
           : 'Masukkan kode verifikasi lalu buat kata sandi baru.'}
       </p>
 
@@ -85,17 +81,17 @@ export function ForgotForm() {
         <form onSubmit={handleRequest} className="mt-6 space-y-4" noValidate>
           <div>
             <label htmlFor="fp-identifier" className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Email atau Nomor HP
+              Email
             </label>
             <div className="relative">
               <UserRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="fp-identifier"
-                type="text"
-                autoComplete="username"
+                type="email"
+                autoComplete="email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="nama@faskes.id atau 0812xxxxxxx"
+                placeholder="nama@dokterpintar.id"
                 className={inputCls}
               />
             </div>
@@ -128,12 +124,7 @@ export function ForgotForm() {
       ) : (
         <form onSubmit={handleReset} className="mt-6 space-y-4" noValidate>
           <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-xs text-teal-800">
-            Kode dikirim ke {channel === 'email' ? 'email' : 'SMS'} Anda.
-            {demoCode && (
-              <span className="block mt-1 font-semibold">
-                Demo — kode Anda: <span className="font-mono text-sm tracking-widest">{demoCode}</span>
-              </span>
-            )}
+            {info || 'Masukkan kode verifikasi dari email lalu buat kata sandi baru.'}
           </div>
 
           <div>
