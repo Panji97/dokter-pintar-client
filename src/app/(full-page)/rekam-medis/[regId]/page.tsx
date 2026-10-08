@@ -90,25 +90,38 @@ export default function EmrDetailPage() {
     return { tindakan, alkes, obat, diskon, total: tindakan + alkes + obat };
   }, [draft]);
 
+  // Kunci anti-klik-ganda: request Selesai yang sedang berjalan mengabaikan klik berikutnya.
+  const selesaiLock = useRef(false);
+  const [finishing, setFinishing] = useState(false);
+
   const selesai = async () => {
-    await updateEmr(regId, draft);
-    await addInvoice({
-      visitId: regId,
-      patientId: reg?.patientId ?? '',
-      patientName: reg?.patientName ?? '',
-      date: new Date().toISOString().slice(0, 10),
-      group: reg?.group ?? 'Umum',
-      doctor: reg?.doctor ?? '',
-      consultationFee: 100000,
-      procedureFee: totals.tindakan,
-      alkesFee: totals.alkes,
-      medicineFee: totals.obat,
-      discount: 0,
-      total: totals.total + 100000,
-      paymentStatus: 'Belum Dibayar',
-    });
-    mutateGlobal((key) => typeof key === 'string' && (key.includes(STRAPI_ENDPOINTS.invoices) || key.includes(STRAPI_ENDPOINTS.registrations)));
-    setMainTab('riwayat');
+    if (selesaiLock.current) return;
+    selesaiLock.current = true;
+    setFinishing(true);
+    try {
+      await updateEmr(regId, draft);
+      await addInvoice({
+        visitId: regId,
+        patientId: reg?.patientId ?? '',
+        patientName: reg?.patientName ?? '',
+        date: new Date().toISOString().slice(0, 10),
+        group: reg?.group ?? 'Umum',
+        doctor: reg?.doctor ?? '',
+        consultationFee: 100000,
+        procedureFee: totals.tindakan,
+        alkesFee: totals.alkes,
+        medicineFee: totals.obat,
+        discount: 0,
+        total: totals.total + 100000,
+        paymentStatus: 'Belum Dibayar',
+      });
+      mutateGlobal((key) => typeof key === 'string' && (key.includes(STRAPI_ENDPOINTS.invoices) || key.includes(STRAPI_ENDPOINTS.registrations)));
+      setMainTab('riwayat');
+      toast('Rekam medis selesai disimpan.');
+    } finally {
+      selesaiLock.current = false;
+      setFinishing(false);
+    }
   };
 
   if (loading || !reg) {
@@ -191,9 +204,9 @@ export default function EmrDetailPage() {
             </button>
           ))}
           <div className="ml-auto hidden md:flex gap-2 shrink-0 pl-2">
-            <button onClick={selesai} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white transition">
+            <button onClick={selesai} disabled={finishing} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white transition disabled:opacity-60 disabled:pointer-events-none">
               <FileCheck className="w-4 h-4" />
-              Selesai
+              {finishing ? 'Menyimpan…' : 'Selesai'}
             </button>
           </div>
         </div>
@@ -201,9 +214,9 @@ export default function EmrDetailPage() {
 
       {/* Aksi Selesai mengambang — hanya mobile */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-30 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] pointer-events-none">
-        <button onClick={selesai} className="pointer-events-auto w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white shadow-xl transition">
+        <button onClick={selesai} disabled={finishing} className="pointer-events-auto w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white shadow-xl transition disabled:opacity-60">
           <FileCheck className="w-4 h-4" />
-          Selesai
+          {finishing ? 'Menyimpan…' : 'Selesai'}
         </button>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useClinicStore } from "@/lib/ClinicStore";
 import { BrandLogo } from "./BrandLogo";
 import { LogoLink } from "./LogoLink";
 import { getSession, logout, type Session } from "@/lib/auth";
@@ -45,6 +46,14 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
+
+  // Jumlah tagihan belum dibayar — badge merah di menu Billing.
+  // Definisi sama seperti halaman Billing ("invoice tertunda") & notifikasi Topbar.
+  const { state } = useClinicStore();
+  const unpaidCount = useMemo(
+    () => state.invoices.filter((i) => i.paymentStatus === "Belum Dibayar").length,
+    [state.invoices],
+  );
 
   useEffect(() => {
     setSession(getSession());
@@ -122,6 +131,15 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               >
                 {item.label}
               </span>
+              {item.href === "/billing" && unpaidCount > 0 && (
+                <span
+                  title={`${unpaidCount} tagihan belum dibayar`}
+                  aria-label={`${unpaidCount} tagihan belum dibayar`}
+                  className="min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
+                >
+                  {unpaidCount > 99 ? "99+" : unpaidCount}
+                </span>
+              )}
               {isActive && (
                 <ChevronRight className="w-3.5 h-3.5 text-teal-400" />
               )}

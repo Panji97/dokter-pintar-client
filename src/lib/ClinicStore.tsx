@@ -934,6 +934,42 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   );
 
   const addInvoice = useCallback<ClinicStoreContextValue['addInvoice']>(async (inv) => {
+    // Idempoten per kunjungan: 1 registrasi = 1 tagihan. Tanpa ini, klik
+    // tombol "Selesai" 2x pada rekam medis yang sama membuat invoice ganda.
+    if (inv.visitId) {
+      const existing = state.invoices.find((i) => i.visitId === inv.visitId);
+      if (existing) {
+        // Tagihan yang sudah Lunas jangan pernah diubah — billing sudah tutup.
+        if (existing.paymentStatus === 'Lunas') return existing;
+        // Masih Belum Dibayar → perbarui dengan nominal terbaru
+        // (EMR sempat diedit setelah klik Selesai pertama).
+        await api('PUT', `${STRAPI_ENDPOINTS.invoices}/${existing.id}`, {
+          data: {
+            patientName: toUpperCase(inv.patientName),
+            doctor: toUpperCase(inv.doctor),
+            consultationFee: inv.consultationFee,
+            procedureFee: inv.procedureFee,
+            alkesFee: inv.alkesFee,
+            medicineFee: inv.medicineFee,
+            discount: inv.discount,
+            total: inv.total,
+          },
+        });
+        const updated: Invoice = {
+          ...existing,
+          patientName: toUpperCase(inv.patientName),
+          doctor: toUpperCase(inv.doctor),
+          consultationFee: inv.consultationFee,
+          procedureFee: inv.procedureFee,
+          alkesFee: inv.alkesFee,
+          medicineFee: inv.medicineFee,
+          discount: inv.discount,
+          total: inv.total,
+        };
+        setState((s) => ({ ...s, invoices: s.invoices.map((x) => (x.id === existing.id ? updated : x)) }));
+        return updated;
+      }
+    }
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.invoices, {
       data: {
         ...inv,
@@ -945,7 +981,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     const created = toModel<Invoice>(res.data);
     setState((s) => ({ ...s, invoices: [created, ...s.invoices] }));
     return created;
-  }, []);
+  }, [state.invoices]);
 
   const payInvoice = useCallback<ClinicStoreContextValue['payInvoice']>(
     async (id, method, discount) => {

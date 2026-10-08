@@ -184,15 +184,27 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
   const legendCls = bare
     ? 'py-2'
     : 'bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5';
-  // Padding horizontal & vertikal: bare (sheet HP) lebih ramping.
-  const pxHead = bare ? 'px-1 py-2.5' : 'px-3 py-3';
-  const pxFilter = bare ? 'px-1 py-2' : 'px-3 py-2.5';
-  const pxItem = bare ? 'px-1 py-2' : 'px-3 py-2.5';
-  const pxPager = bare ? 'px-1 py-2' : 'px-3 py-2';
+  // Kepadatan khusus desktop (non-bare): padding dirampingkan agar
+  // ALUR STATUS ikut terlihat tanpa scroll panel. Mobile/sheet (bare) tetap lega.
+  // ALUR STATUS sendiri tidak diubah sama sekali.
+  // Mobile & desktop SAMA-SAMA between: kartu status mentok atas,
+  // ALUR STATUS mentok bawah (min-h menyesuaikan wadahnya).
+  const asideCls = bare
+    ? 'w-full shrink-0 flex flex-col min-h-[calc(100dvh-24px)]'
+    : 'w-full shrink-0 flex flex-col min-h-[calc(100dvh-92px)]';
+  const wrapCls = 'flex-1 flex flex-col gap-3';
+  const pxHead = bare ? 'px-1 py-2.5' : 'px-3 py-2';
+  const pxFilter = bare ? 'px-1 py-2' : 'px-3 py-2';
+  const pxItem = bare ? 'px-1 py-2' : 'px-3 py-2';
+  const pxPager = bare ? 'px-1 py-2' : 'px-3 py-1.5';
+  const summaryPy = bare ? 'py-3' : 'py-2';
+  const listCls = bare
+    ? 'h-[300px] overflow-y-auto divide-y divide-slate-50'
+    : 'h-[270px] overflow-y-auto divide-y divide-slate-50';
 
   return (
-    <aside className="w-full shrink-0">
-      <div className="space-y-4">
+    <aside className={asideCls}>
+      <div className={wrapCls}>
         <div className={cardCls}>
           <div className={`${pxHead} border-b border-slate-100 flex items-center justify-between gap-2`}>
             <div className="min-w-0">
@@ -212,15 +224,15 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
 
           {/* Ringkasan status */}
           <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
-            <div className="px-2 py-3 text-center">
+            <div className={`px-2 text-center ${summaryPy}`}>
               <div className="text-lg font-bold text-amber-600">{waitingCount}</div>
               <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Menunggu</div>
             </div>
-            <div className="px-2 py-3 text-center">
+            <div className={`px-2 text-center ${summaryPy}`}>
               <div className="text-lg font-bold text-blue-600">{emrCount}</div>
               <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">EMR / Proses</div>
             </div>
-            <div className="px-2 py-3 text-center">
+            <div className={`px-2 text-center ${summaryPy}`}>
               <div className="text-lg font-bold text-emerald-600">{finishedCount}</div>
               <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Selesai</div>
             </div>
@@ -228,7 +240,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
 
           {/* Filter antrean: tanggal + poli dalam satu kelompok */}
           <div className={`${pxFilter} border-b border-slate-100 bg-slate-50/60`}>
-            <div className="flex items-center justify-between mb-2">
+            <div className={`flex items-center justify-between ${bare ? 'mb-2' : 'mb-1.5'}`}>
               <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
                 <SlidersHorizontal className="w-3 h-3" />
                 Filter Antrean
@@ -243,8 +255,8 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
                 </button>
               )}
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-teal-400 transition">
+            <div className={bare ? 'space-y-2' : 'space-y-1.5'}>
+              <div className={`flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 focus-within:border-teal-400 transition ${bare ? 'py-1.5' : 'py-1'}`}>
                 <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <input
                   id="queue-date-filter"
@@ -256,7 +268,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
                   className="flex-1 min-w-0 text-xs bg-transparent outline-none text-slate-700"
                 />
               </div>
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-teal-400 transition">
+              <div className={`flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 focus-within:border-teal-400 transition ${bare ? 'py-1.5' : 'py-1'}`}>
                 <Stethoscope className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <select
                   id="queue-poli-filter"
@@ -275,7 +287,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
           </div>
 
           {/* Daftar registrasi — tinggi tetap untuk 5 baris per halaman, scroll internal */}
-          <div className="h-[300px] overflow-y-auto divide-y divide-slate-50">
+          <div className={listCls}>
             {pagedRegs.map((r) => (
               <button
                 key={r.id}
@@ -305,7 +317,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
               </button>
             ))}
             {shownRegs.length === 0 && (
-              <div className="px-4 py-10 text-center">
+              <div className={`text-center ${bare ? 'px-4 py-10' : 'px-4 py-6'}`}>
                 <ClipboardPlus className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                 <p className="text-xs text-slate-400">
                   {poliFilter === 'Semua'
@@ -347,8 +359,11 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
             </div>
           )}
         </div>
-        {/* Panduan alur status — vertikal, tepat di bawah kartu antrean */}
-        <div className={legendCls}>
+        {/* Garis pembatas + panduan alur status — menempel bawah (mt-auto),
+            berlaku sama di mobile & desktop */}
+        <div className="mt-auto flex flex-col gap-3 shrink-0">
+          <div aria-hidden="true" className="border-t border-slate-200" />
+          <div className={legendCls}>
           <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">Alur Status</p>
           <ol>
             {[
@@ -368,6 +383,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
               </li>
             ))}
           </ol>
+          </div>
         </div>
       </div>
     </aside>
