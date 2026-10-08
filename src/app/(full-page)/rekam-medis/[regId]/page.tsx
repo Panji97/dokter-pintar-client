@@ -11,6 +11,11 @@ import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicSto
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { ICD10_LIST, ICD9_LIST } from '@/lib/icd';
 import {
+  VITAL_RULES, vitalRuleOf, sanitizeNumeric, sanitizeInt,
+  vitalError, tensiPairError, toothError, gravidaError, qtyError,
+  TEXT_LIMITS,
+} from '@/lib/emr-validation';
+import {
   EmrDocument, DiagnosaItem, TindakanItem, AlkesItem, KondisiGigi,
 } from '@/types/clinic';
 import {
@@ -94,8 +99,99 @@ export default function EmrDetailPage() {
   const selesaiLock = useRef(false);
   const [finishing, setFinishing] = useState(false);
 
+  // ---- Validasi field (baca dari draft, tampil inline + gate Selesai) ----
+  const setVital = (key: (typeof VITAL_RULES)[number]['key'], raw: string) => {
+    const rule = vitalRuleOf(key);
+    if (!rule) return;
+    setDraft({
+      ...draft,
+      pemeriksaanUmum: { ...draft.pemeriksaanUmum, [key]: sanitizeNumeric(raw, rule.decimals) },
+    });
+  };
+  const vitalErrors = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const r of VITAL_RULES) map[r.key] = vitalError(r, draft.pemeriksaanUmum[r.key] ?? '');
+    map.tensiPair = tensiPairError(draft.pemeriksaanUmum.tensiSistolik, draft.pemeriksaanUmum.tensiDiastolik);
+    return map;
+  }, [draft.pemeriksaanUmum]);
+  const gravidaErr = useMemo(() => gravidaError(draft.anamnesaUmum.gravida), [draft.anamnesaUmum.gravida]);
+
+  /** Pemeriksaan sebelum Selesai — kembalikan daftar pesan (kosong = lolos). */
+  const validateBeforeFinish = (): string[] => {
+    const problems: string[] = [];
+    if (!draft.anamnesaUmum.keluhanUtama.trim()) {
+      problems.push('Keluhan utama wajib diisi (Subjektif — Anamnesa Umum).');
+    }
+    for (const r of VITAL_RULES) {
+      const err = vitalError(r, draft.pemeriksaanUmum[r.key] ?? '');
+      if (err) problems.push(`${err} (Objektif — Pemeriksaan Umum).`);
+    }
+    const pair = tensiPairError(draft.pemeriksaanUmum.tensiSistolik, draft.pemeriksaanUmum.tensiDiastolik);
+    if (pair) problems.push(`${pair} (Objektif — Pemeriksaan Umum).`);
+    const g = gravidaError(draft.anamnesaUmum.gravida);
+    if (g) problems.push(`${g} (Subjektif — Anamnesa Umum).`);
+    if (draft.diagnosa.length === 0) {
+      problems.push('Minimal 1 diagnosa wajib diisi (Asesmen — Diagnosa).');
+    }
+    draft.kondisi.forEach((k, i) => {
+      if (k.toothNumber == null || !Number.isInteger(k.toothNumber) || k.toothNumber < 11 || k.toothNumber > 48) {
+        problems.push(`Kondisi #${i + 1}: nomor gigi FDI tidak valid.`);
+      } else {
+        const q = Math.floor(k.toothNumber / 10);
+        const t = k.toothNumber % 10;
+        if (q < 1 || q > 4 || t < 1 || t > 8) problems.push(`Kondisi #${i + 1}: nomor gigi FDI tidak valid.`);
+      }
+      if (!k.deskripsi.trim()) problems.push(`Kondisi #${i + 1}: deskripsi wajib diisi.`);
+    });
+    draft.tindakan.forEach((t, i) => {
+      const tq = toothError(t.tooth, { allowDash: true });
+      if (tq) problems.push(`Tindakan #${i + 1} (${t.name || t.code}): ${tq}`);
+      const qq = qtyError(t.qty, 'Jumlah tindakan');
+      if (qq) problems.push(`Tindakan #${i + 1} (${t.name || t.code}): ${qq}.`);
+    });
+    draft.alkes.forEach((a, i) => {
+      const qq = qtyError(a.qty, 'Jumlah alkes');
+      if (qq) problems.push(`Alkes #${i + 1} (${a.name || a.code}): ${qq}.`);
+    });
+    return problems;
+  };
+
+  /** Arahkan dokter ke tab berisi masalah pertama. */
+  const jumpToProblem = (msg: string) => {
+    if (msg.includes('Anamnesa Umum')) {
+      setMainTab('so');
+      setSoTab('anamnesa-umum');
+    } else if (msg.includes('Pemeriksaan Umum')) {
+      setMainTab('so');
+      setSoTab('pemeriksaan');
+    } else if (msg.includes('Diagnosa')) {
+      setMainTab('ap');
+      setApTab('diagnosa');
+    } else if (msg.includes('Kondisi')) {
+      setMainTab('ap');
+      setApTab('kondisi');
+    } else if (msg.includes('Tindakan')) {
+      setMainTab('ap');
+      setApTab('tindakan');
+    } else if (msg.includes('Alkes')) {
+      setMainTab('ap');
+      setApTab('alkes');
+    }
+  };
+
   const selesai = async () => {
     if (selesaiLock.current) return;
+    // Gate pencatatan medis: data wajib & rentang vital harus benar dulu.
+    const problems = validateBeforeFinish();
+    if (problems.length > 0) {
+      jumpToProblem(problems[0]);
+      toast(
+        problems.length === 1
+          ? problems[0]
+          : `${problems[0]} (+${problems.length - 1} masalah lain)`,
+      );
+      return;
+    }
     selesaiLock.current = true;
     setFinishing(true);
     try {
@@ -361,11 +457,26 @@ export default function EmrDetailPage() {
                   ['gravida', 'Gravida'],
                 ] as const).map(([key, label]) => (
                   <div key={key} className={key === 'gravida' ? '' : 'md:col-span-2'}>
-                    <label className={labelCls}>{label}</label>
+                    <label className={labelCls}>
+                      {label}
+                      {key === 'keluhanUtama' && <span className="text-rose-500"> *</span>}
+                      {key === 'gravida' && <span className="text-slate-400 font-normal"> — format G_P_A_ (cth. G2P1A0)</span>}
+                    </label>
                     {key === 'gravida' ? (
-                      <input value={draft.anamnesaUmum.gravida} onChange={(e) => setDraft({ ...draft, anamnesaUmum: { ...draft.anamnesaUmum, gravida: e.target.value } })} className={inputCls} />
+                      <>
+                        <input
+                          value={draft.anamnesaUmum.gravida}
+                          onChange={(e) => setDraft({ ...draft, anamnesaUmum: { ...draft.anamnesaUmum, gravida: e.target.value.toUpperCase().replace(/[^GPAp0-9]/gi, '') } })}
+                          maxLength={12}
+                          placeholder="G2P1A0"
+                          autoComplete="off"
+                          aria-invalid={!!gravidaErr}
+                          className={`${inputCls} uppercase ${gravidaErr ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40' : ''}`}
+                        />
+                        {gravidaErr && <p className="text-[11px] text-rose-600 mt-1 leading-tight">{gravidaErr}</p>}
+                      </>
                     ) : (
-                      <textarea rows={2} value={draft.anamnesaUmum[key]} onChange={(e) => setDraft({ ...draft, anamnesaUmum: { ...draft.anamnesaUmum, [key]: e.target.value } })} className={inputCls} />
+                      <textarea rows={2} maxLength={TEXT_LIMITS.textarea} value={draft.anamnesaUmum[key]} onChange={(e) => setDraft({ ...draft, anamnesaUmum: { ...draft.anamnesaUmum, [key]: e.target.value } })} className={inputCls} />
                     )}
                   </div>
                 ))}
@@ -379,6 +490,7 @@ export default function EmrDetailPage() {
                           value={draft.anamnesaUmum.alergi[a]}
                           onChange={(e) => setDraft({ ...draft, anamnesaUmum: { ...draft.anamnesaUmum, alergi: { ...draft.anamnesaUmum.alergi, [a]: e.target.value } } })}
                           placeholder="-"
+                          maxLength={TEXT_LIMITS.short}
                           className="flex-1 min-w-0 px-2 py-1.5 text-xs border border-slate-300 rounded-lg outline-none focus:border-teal-400"
                         />
                       </div>
@@ -401,7 +513,7 @@ export default function EmrDetailPage() {
                 ] as const).map(([key, label]) => (
                   <div key={key}>
                     <label className={labelCls}>{label}</label>
-                    <input value={draft.anamnesaOdontogram[key]} onChange={(e) => setDraft({ ...draft, anamnesaOdontogram: { ...draft.anamnesaOdontogram, [key]: e.target.value } })} className={inputCls} />
+                    <input maxLength={TEXT_LIMITS.input} value={draft.anamnesaOdontogram[key]} onChange={(e) => setDraft({ ...draft, anamnesaOdontogram: { ...draft.anamnesaOdontogram, [key]: e.target.value } })} className={inputCls} />
                   </div>
                 ))}
               </div>
@@ -411,29 +523,39 @@ export default function EmrDetailPage() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
                 <div>
                   <label className={labelCls}>Deskripsi Pemeriksaan</label>
-                  <textarea rows={2} value={draft.pemeriksaanUmum.deskripsi} onChange={(e) => setDraft({ ...draft, pemeriksaanUmum: { ...draft.pemeriksaanUmum, deskripsi: e.target.value } })} className={inputCls} />
+                  <textarea rows={2} maxLength={TEXT_LIMITS.textarea} value={draft.pemeriksaanUmum.deskripsi} onChange={(e) => setDraft({ ...draft, pemeriksaanUmum: { ...draft.pemeriksaanUmum, deskripsi: e.target.value } })} className={inputCls} />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {([
-                    ['nadi', 'Nadi', 'menit'],
-                    ['tensiSistolik', 'Tensi (Sistole)', 'mmHg'],
-                    ['tensiDiastolik', 'Tensi (Diastole)', 'mmHg'],
-                    ['suhu', 'Suhu', '°C'],
-                    ['beratBadan', 'Berat Badan', 'kg'],
-                    ['tinggiBadan', 'Tinggi Badan', 'cm'],
-                    ['pernapasan', 'Pernapasan', 'menit'],
-                  ] as const).map(([key, label, unit]) => (
-                    <div key={key}>
-                      <label className={labelCls}>{label} ({unit})</label>
-                      <input value={draft.pemeriksaanUmum[key]} onChange={(e) => setDraft({ ...draft, pemeriksaanUmum: { ...draft.pemeriksaanUmum, [key]: e.target.value } })} className={inputCls} />
-                    </div>
-                  ))}
+                  {VITAL_RULES.map((rule) => {
+                    const err = vitalErrors[rule.key];
+                    return (
+                      <div key={rule.key}>
+                        <label className={labelCls}>{rule.label} ({rule.unit})</label>
+                        <input
+                          value={draft.pemeriksaanUmum[rule.key]}
+                          onChange={(e) => setVital(rule.key, e.target.value)}
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder={`${rule.min}–${rule.max}`}
+                          aria-invalid={!!err}
+                          aria-describedby={err ? `err-${rule.key}` : undefined}
+                          className={`${inputCls} ${err ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40' : ''}`}
+                        />
+                        {err && (
+                          <p id={`err-${rule.key}`} className="text-[11px] text-rose-600 mt-1 leading-tight">{err}</p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
+                {vitalErrors.tensiPair && (
+                  <p className="text-[11px] text-rose-600 leading-tight">{vitalErrors.tensiPair}</p>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {(['mata', 'gigiMulut', 'kulit'] as const).map((key) => (
                     <div key={key}>
                       <label className={labelCls}>{key === 'mata' ? 'Mata' : key === 'gigiMulut' ? 'Gigi & Mulut' : 'Kulit'}</label>
-                      <input value={draft.pemeriksaanUmum[key]} onChange={(e) => setDraft({ ...draft, pemeriksaanUmum: { ...draft.pemeriksaanUmum, [key]: e.target.value } })} className={inputCls} />
+                      <input maxLength={TEXT_LIMITS.input} value={draft.pemeriksaanUmum[key]} onChange={(e) => setDraft({ ...draft, pemeriksaanUmum: { ...draft.pemeriksaanUmum, [key]: e.target.value } })} className={inputCls} />
                     </div>
                   ))}
                 </div>
@@ -560,17 +682,39 @@ export default function EmrDetailPage() {
                 </table></div>
                 <div className="flex flex-wrap gap-2 items-end border-t border-slate-100 pt-4">
                   <div className="w-28">
-                    <label className={labelCls}>No. Gigi</label>
-                    <input type="number" value={newKondisi.toothNumber ?? ''} onChange={(e) => setNewKondisi({ ...newKondisi, toothNumber: e.target.value ? Number(e.target.value) : null })} className={inputCls} />
+                    <label className={labelCls}>No. Gigi (FDI) *</label>
+                    <input
+                      value={newKondisi.toothNumber ?? ''}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                        setNewKondisi({ ...newKondisi, toothNumber: digits ? Number(digits) : null });
+                      }}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="26"
+                      className={inputCls}
+                    />
                   </div>
                   <div className="flex-1 min-w-48">
-                    <label className={labelCls}>Deskripsi</label>
-                    <input value={newKondisi.deskripsi} onChange={(e) => setNewKondisi({ ...newKondisi, deskripsi: e.target.value })} className={inputCls} />
+                    <label className={labelCls}>Deskripsi *</label>
+                    <input maxLength={TEXT_LIMITS.deskripsi} value={newKondisi.deskripsi} onChange={(e) => setNewKondisi({ ...newKondisi, deskripsi: e.target.value })} className={inputCls} />
                   </div>
                   <button
                     onClick={() => {
-                      if (!newKondisi.deskripsi) return;
-                      setDraft({ ...draft, kondisi: [...draft.kondisi, { ...newKondisi, id: `kd-${Date.now()}` }] });
+                      if (!newKondisi.deskripsi.trim()) {
+                        toast('Deskripsi kondisi wajib diisi.');
+                        return;
+                      }
+                      if (newKondisi.toothNumber == null) {
+                        toast('Nomor gigi (FDI) wajib diisi, contoh 26.');
+                        return;
+                      }
+                      const tErr = toothError(String(newKondisi.toothNumber));
+                      if (tErr) {
+                        toast(tErr);
+                        return;
+                      }
+                      setDraft({ ...draft, kondisi: [...draft.kondisi, { ...newKondisi, deskripsi: newKondisi.deskripsi.trim(), id: `kd-${Date.now()}` }] });
                       setNewKondisi({ id: '', toothNumber: null, deskripsi: '' });
                     }}
                     className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-lg transition"
@@ -670,7 +814,14 @@ export default function EmrDetailPage() {
                   </div>
                   <button
                     onClick={() => {
-                      if (!newDiag.icd10Code) return;
+                      if (!newDiag.icd10Code) {
+                        toast('Pilih kode ICD-10 dulu.');
+                        return;
+                      }
+                      if (draft.diagnosa.some((d) => d.type === newDiag.type && d.icd10Code === newDiag.icd10Code)) {
+                        toast('Diagnosa tersebut sudah ada di daftar.');
+                        return;
+                      }
                       setDraft({ ...draft, diagnosa: [...draft.diagnosa, { ...newDiag, id: `dg-${Date.now()}` }] });
                       setNewDiag({ id: '', type: newDiag.type, icd10Code: '', icd10Desc: '' });
                     }}
@@ -774,14 +925,51 @@ export default function EmrDetailPage() {
                   </div>
                   <div className="w-24">
                     <label className={labelCls}>Posisi Gigi</label>
-                    <input value={newTindakan.tooth} onChange={(e) => setNewTindakan({ ...newTindakan, tooth: e.target.value })} className={inputCls} />
+                    <input
+                      value={newTindakan.tooth}
+                      onChange={(e) => setNewTindakan({ ...newTindakan, tooth: e.target.value.toUpperCase().replace(/[^0-9-]/g, '').slice(0, 2) })}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="- / 26"
+                      aria-invalid={!!toothError(newTindakan.tooth, { allowDash: true })}
+                      className={`${inputCls} ${toothError(newTindakan.tooth, { allowDash: true }) ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40' : ''}`}
+                    />
+                    {toothError(newTindakan.tooth, { allowDash: true }) && (
+                      <p className="text-[11px] text-rose-600 mt-1 leading-tight">FDI 11–48 / “-”</p>
+                    )}
                   </div>
                   <div className="w-20">
                     <label className={labelCls}>Jml</label>
-                    <input type="number" min={1} value={newTindakan.qty} onChange={(e) => setNewTindakan({ ...newTindakan, qty: Number(e.target.value) })} className={inputCls} />
+                    <input
+                      value={newTindakan.qty}
+                      onChange={(e) => {
+                        const digits = sanitizeInt(e.target.value);
+                        setNewTindakan({ ...newTindakan, qty: digits ? Math.min(999, Number(digits)) : 1 });
+                      }}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      aria-invalid={!!qtyError(newTindakan.qty, 'Jumlah tindakan')}
+                      className={`${inputCls} ${qtyError(newTindakan.qty, 'Jumlah tindakan') ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40' : ''}`}
+                    />
                   </div>
                   <button
-                    onClick={() => setDraft({ ...draft, tindakan: [...draft.tindakan, { ...newTindakan, id: `tn-${Date.now()}` }] })}
+                    onClick={() => {
+                      const tErr = toothError(newTindakan.tooth, { allowDash: true });
+                      if (tErr) {
+                        toast(`Posisi gigi: ${tErr} (isi "-" bila bukan gigi spesifik).`);
+                        return;
+                      }
+                      const qErr = qtyError(newTindakan.qty, 'Jumlah tindakan');
+                      if (qErr) {
+                        toast(qErr);
+                        return;
+                      }
+                      if (!newTindakan.name) {
+                        toast('Pilih tindakan dari master dulu.');
+                        return;
+                      }
+                      setDraft({ ...draft, tindakan: [...draft.tindakan, { ...newTindakan, id: `tn-${Date.now()}` }] });
+                    }}
                     className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-lg transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Tindakan
@@ -886,10 +1074,31 @@ export default function EmrDetailPage() {
                   </div>
                   <div className="w-20">
                     <label className={labelCls}>Jml</label>
-                    <input type="number" min={1} value={newAlkes.qty} onChange={(e) => setNewAlkes({ ...newAlkes, qty: Number(e.target.value) })} className={inputCls} />
+                    <input
+                      value={newAlkes.qty}
+                      onChange={(e) => {
+                        const digits = sanitizeInt(e.target.value);
+                        setNewAlkes({ ...newAlkes, qty: digits ? Math.min(999, Number(digits)) : 1 });
+                      }}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      aria-invalid={!!qtyError(newAlkes.qty, 'Jumlah alkes')}
+                      className={`${inputCls} ${qtyError(newAlkes.qty, 'Jumlah alkes') ? 'border-rose-400 focus:border-rose-500 bg-rose-50/40' : ''}`}
+                    />
                   </div>
                   <button
-                    onClick={() => setDraft({ ...draft, alkes: [...draft.alkes, { ...newAlkes, id: `al-${Date.now()}` }] })}
+                    onClick={() => {
+                      const qErr = qtyError(newAlkes.qty, 'Jumlah alkes');
+                      if (qErr) {
+                        toast(qErr);
+                        return;
+                      }
+                      if (!newAlkes.name) {
+                        toast('Pilih alkes dari master dulu.');
+                        return;
+                      }
+                      setDraft({ ...draft, alkes: [...draft.alkes, { ...newAlkes, id: `al-${Date.now()}` }] });
+                    }}
                     className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-lg transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Pemakaian Alkes

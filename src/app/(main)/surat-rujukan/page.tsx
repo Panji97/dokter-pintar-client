@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { useClinicStore, fmtDate } from "@/lib/ClinicStore";
 import { FileText, FileOutput } from "lucide-react";
@@ -18,7 +18,7 @@ const REFERRAL_KINDS = [
 ] as const;
 
 export default function SuratRujukanPage() {
-  const { state, addLetter, addReferral } = useClinicStore();
+  const { state, addLetter, addReferral, ensureModule } = useClinicStore();
   const [tab, setTab] = useState<"surat" | "rujukan">("surat");
   const [kind, setKind] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
@@ -28,6 +28,10 @@ export default function SuratRujukanPage() {
   const [doctor, setDoctor] = useState(state.staff[0]?.name ?? "");
   const [notes, setNotes] = useState("");
   const [destination, setDestination] = useState("");
+
+  useEffect(() => {
+    ensureModule("surat");
+  }, [ensureModule]);
 
   const patient = state.patients.find((p) => p.id === patientId);
 
@@ -42,6 +46,7 @@ export default function SuratRujukanPage() {
       addLetter({
         kind: kind as never,
         patientName: patient.name,
+        patientId: patient.id,
         doctor,
         date: new Date().toISOString().slice(0, 10),
         notes,
@@ -50,6 +55,7 @@ export default function SuratRujukanPage() {
       addReferral({
         kind: kind as never,
         patientName: patient.name,
+        patientId: patient.id,
         doctor,
         destination: destination || "—",
         diagnosis: notes,

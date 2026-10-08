@@ -7,9 +7,13 @@ import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import {
   Search, Receipt, Pill, ShieldCheck, Plus, Printer, Banknote, QrCode, CreditCard, Wallet,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
 type Tab = 'pasien' | 'apotek' | 'klaim';
+
+/** Ukuran halaman daftar billing (berlaku untuk ketiga tab). */
+const PAGE_SIZE = 10;
 
 const PAYMENT_METHODS = [
   { label: 'Tunai', icon: Banknote },
@@ -18,6 +22,87 @@ const PAYMENT_METHODS = [
   { label: 'Transfer', icon: Wallet },
   { label: 'BPJS', icon: Receipt },
 ] as const;
+
+/** Nomor halaman dengan elipsis (1 … 4 5 6 … 12) agar tetap ringkas bila data banyak. */
+function pageNumbers(page: number, totalPages: number): (number | '…')[] {
+  if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const keep = [...new Set(
+    [1, totalPages, page - 1, page, page + 1].filter((n) => n >= 1 && n <= totalPages),
+  )].sort((a, b) => a - b);
+  const out: (number | '…')[] = [];
+  keep.forEach((n, i) => {
+    if (i > 0 && n - keep[i - 1] > 1) out.push('…');
+    out.push(n);
+  });
+  return out;
+}
+
+/**
+ * Footer pagination ramah dokter: tombol besar (min. 40px, mudah disentuh),
+ * nomor halaman yang bisa dilompat langsung, dan label bahasa sehari-hari.
+ * Tampil hanya bila lebih dari 1 halaman.
+ */
+function BillingPager({ safePage, totalPages, total, unit, onPage }: {
+  safePage: number;
+  totalPages: number;
+  total: number;
+  /** Satuan untuk label, mis. "tagihan" / "klaim". */
+  unit: string;
+  onPage: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  const start = (safePage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(safePage * PAGE_SIZE, total);
+  const navBtn =
+    'flex items-center justify-center gap-1 h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 transition hover:border-teal-400 hover:text-teal-700 active:bg-teal-50 disabled:opacity-40 disabled:pointer-events-none';
+  return (
+    <div className="flex flex-col items-center gap-2.5 px-4 md:px-5 py-3 border-t border-slate-100 sm:flex-row sm:justify-between">
+      <nav aria-label="Navigasi halaman" className="flex items-center gap-1.5 order-1 sm:order-2">
+        <button
+          onClick={() => onPage(Math.max(1, safePage - 1))}
+          disabled={safePage === 1}
+          aria-label="Ke halaman sebelumnya"
+          className={navBtn}
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span className="hidden min-[420px]:inline">Sebelumnya</span>
+        </button>
+        {pageNumbers(safePage, totalPages).map((n, i) =>
+          n === '…' ? (
+            <span key={`e${i}`} aria-hidden className="w-8 text-center text-slate-400">…</span>
+          ) : (
+            <button
+              key={n}
+              onClick={() => onPage(n)}
+              aria-label={`Ke halaman ${n}`}
+              aria-current={n === safePage ? 'page' : undefined}
+              className={`min-w-10 h-10 px-2 rounded-xl text-sm font-bold transition ${
+                n === safePage
+                  ? 'bg-teal-600 text-white shadow-md'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-700'
+              }`}
+            >
+              {n}
+            </button>
+          ),
+        )}
+        <button
+          onClick={() => onPage(Math.min(totalPages, safePage + 1))}
+          disabled={safePage === totalPages}
+          aria-label="Ke halaman berikutnya"
+          className={navBtn}
+        >
+          <span className="hidden min-[420px]:inline">Berikutnya</span>
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </nav>
+      <p className="text-xs text-slate-500 order-2 sm:order-1">
+        Menampilkan <span className="font-bold text-slate-700">{start}–{end}</span> dari{' '}
+        <span className="font-bold text-slate-700">{total}</span> {unit}
+      </p>
+    </div>
+  );
+}
 
 export default function BillingPage() {
   const { state, payInvoice, addApotekInvoice, ensureModule } = useClinicStore();
@@ -45,6 +130,27 @@ export default function BillingPage() {
 
   const claimList = state.claims;
   const totalBelum = state.invoices.filter((i) => i.paymentStatus === 'Belum Dibayar').reduce((s, i) => s + i.total, 0);
+
+  // Pagination — 1 state dipakai ketiga tab; direset langsung di
+  // event handler (ganti tab / ketik pencarian), tanpa effect.
+  const [page, setPage] = useState(1);
+  const goTab = (t: Tab) => {
+    setTab(t);
+    setPage(1);
+  };
+  const paginate = <T,>(list: T[]) => {
+    const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    const safePage = Math.min(page, totalPages);
+    return {
+      items: list.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+      totalPages,
+      safePage,
+      total: list.length,
+    };
+  };
+  const pagedInvoices = paginate(filteredInvoices);
+  const pagedApotek = paginate(state.apotekInvoices);
+  const pagedKlaim = paginate(claimList);
 
   const inputCls = 'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400';
   const labelCls = 'text-xs font-medium text-slate-600 block mb-1';
@@ -123,7 +229,7 @@ export default function BillingPage() {
           ] as const).map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setTab(key)}
+              onClick={() => goTab(key)}
               className={`px-1 sm:px-4 py-2.5 rounded-lg transition text-center w-full ${tab === key ? 'bg-teal-600 text-white shadow-md ring-1 ring-teal-600 font-semibold' : 'text-slate-500 hover:text-slate-800 hover:bg-white/70'}`}
             >
               {label}
@@ -140,7 +246,7 @@ export default function BillingPage() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   placeholder="Cari Pasien"
                   className="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-full sm:w-60"
                 />
@@ -148,7 +254,7 @@ export default function BillingPage() {
             </div>
             {/* Mobile: kartu tagihan */}
             <div className="md:hidden divide-y divide-slate-100">
-              {filteredInvoices.map((inv) => (
+              {pagedInvoices.items.map((inv) => (
                 <div key={inv.id} className="px-4 py-3.5 space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-medium text-slate-800 text-sm truncate">{inv.patientName}</div>
@@ -199,7 +305,7 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredInvoices.map((inv) => (
+                {pagedInvoices.items.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50 transition">
                     <td className="px-4 py-3 text-xs text-slate-600">{fmtDate(inv.date)}</td>
                     <td className="px-4 py-3">
@@ -240,6 +346,7 @@ export default function BillingPage() {
                 )}
               </tbody>
             </table></div>
+            <BillingPager safePage={pagedInvoices.safePage} totalPages={pagedInvoices.totalPages} total={pagedInvoices.total} unit="tagihan" onPage={setPage} />
           </div>
         )}
 
@@ -262,7 +369,7 @@ export default function BillingPage() {
             </div>
             {/* Mobile: kartu apotek */}
             <div className="md:hidden divide-y divide-slate-100">
-              {state.apotekInvoices.map((a) => (
+              {pagedApotek.items.map((a) => (
                 <div key={a.id} className="px-4 py-3.5 space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium text-slate-800 truncate">{a.patientName}</div>
@@ -296,7 +403,7 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {state.apotekInvoices.map((a) => (
+                {pagedApotek.items.map((a) => (
                   <tr key={a.id} className="hover:bg-slate-50 transition">
                     <td className="px-4 py-3 text-xs text-slate-600">{fmtDate(a.date)}</td>
                     <td className="px-4 py-3">
@@ -317,6 +424,7 @@ export default function BillingPage() {
                 )}
               </tbody>
             </table></div>
+            <BillingPager safePage={pagedApotek.safePage} totalPages={pagedApotek.totalPages} total={pagedApotek.total} unit="tagihan apotek" onPage={setPage} />
           </div>
         )}
 
@@ -328,7 +436,7 @@ export default function BillingPage() {
             </div>
             {/* Mobile: kartu klaim */}
             <div className="md:hidden divide-y divide-slate-100">
-              {claimList.map((c) => (
+              {pagedKlaim.items.map((c) => (
                 <div key={c.id} className="px-4 py-3.5 space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium text-slate-800 truncate">{c.patientName}</div>
@@ -366,7 +474,7 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {claimList.map((c) => (
+                {pagedKlaim.items.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50 transition">
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-800">{c.patientName}</div>
@@ -393,6 +501,7 @@ export default function BillingPage() {
                 )}
               </tbody>
             </table></div>
+            <BillingPager safePage={pagedKlaim.safePage} totalPages={pagedKlaim.totalPages} total={pagedKlaim.total} unit="klaim" onPage={setPage} />
           </div>
         )}
       </main>
@@ -494,10 +603,15 @@ export default function BillingPage() {
               <button
                 onClick={() => {
                   if (!obatForm.patientName) return;
+                  // Hubungkan ke pasien terdaftar bila namanya cocok (obat bebas bisa tanpa relasi).
+                  const matched = state.patients.find(
+                    (p) => p.name.toUpperCase() === obatForm.patientName.trim().toUpperCase()
+                  );
                   addApotekInvoice({
                     date: new Date().toISOString().slice(0, 10),
                     type: obatForm.type,
                     patientName: obatForm.patientName,
+                    ...(matched ? { patientId: matched.id } : {}),
                     items: obatForm.items,
                     total: obatForm.items.reduce((s, i) => s + i.qty * i.price, 0),
                     paymentStatus: 'Lunas',

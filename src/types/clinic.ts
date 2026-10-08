@@ -59,6 +59,8 @@ export type BookingStatus = 'Menunggu Konfirmasi' | 'Terjadwal' | 'Selesai' | 'D
 export interface Booking {
   id: string;
   patientName: string;
+  /** documentId pasien — diisi bila booking terhubung ke data pasien terdaftar. */
+  patientId?: string;
   phone: string;
   serviceType: string;
   doctor: string;
@@ -193,6 +195,8 @@ export interface Invoice {
 
 export interface ApotekInvoice {
   id: string;
+  /** documentId pasien — diisi bila pembeli cocok dengan pasien terdaftar (obat bebas bisa tanpa relasi). */
+  patientId?: string;
   date: string;
   type: 'Obat Bebas' | 'Obat Resep';
   patientName: string;
@@ -204,6 +208,8 @@ export interface ApotekInvoice {
 export interface InsuranceClaim {
   id: string;
   patientName: string;
+  /** documentId pasien — relasi ke data pasien terdaftar. */
+  patientId?: string;
   penjamin: PatientGroup;
   amount: number;
   status: 'Diajukan' | 'Diproses' | 'Dibayar' | 'Ditolak';
@@ -222,6 +228,8 @@ export interface Letter {
   id: string;
   kind: LetterKind;
   patientName: string;
+  /** documentId pasien — relasi ke data pasien terdaftar. */
+  patientId?: string;
   doctor: string;
   date: string;
   notes: string;
@@ -231,6 +239,8 @@ export interface Referral {
   id: string;
   kind: 'Rujukan Internal' | 'Rujukan ke Fasilitas Lain';
   patientName: string;
+  /** documentId pasien — relasi ke data pasien terdaftar. */
+  patientId?: string;
   doctor: string;
   destination: string;
   diagnosis: string;

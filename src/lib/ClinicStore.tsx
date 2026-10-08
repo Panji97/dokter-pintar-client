@@ -95,7 +95,7 @@ function currentFaskesIdSafe(): string | null {
   }
 }
 
-async function fetchAll<T>(endpoint: string, sort: string): Promise<T[]> {
+async function fetchAll<T>(endpoint: string, sort: string, populate: string[] = []): Promise<T[]> {
   const faskesId = currentFaskesId();
   const out: T[] = [];
   let page = 1;
@@ -106,6 +106,7 @@ async function fetchAll<T>(endpoint: string, sort: string): Promise<T[]> {
       sort,
       'filters[faskes][documentId][$eq]': faskesId,
     });
+    for (const rel of populate) params.append(`populate[${rel}][fields][0]`, 'documentId');
     const res = await api<StrapiList>('GET', `${endpoint}?${params.toString()}`);
     out.push(...res.data.map(toModel<T>));
     const pageCount = res.meta?.pagination?.pageCount ?? 1;
@@ -113,6 +114,14 @@ async function fetchAll<T>(endpoint: string, sort: string): Promise<T[]> {
     page += 1;
   }
   return out;
+}
+
+/** Ambil documentId relasi hasil populate (objek) dengan fallback nilai string lama. */
+function relDocId(v: unknown): string | null {
+  if (v && typeof v === 'object' && typeof (v as { documentId?: unknown }).documentId === 'string') {
+    return (v as { documentId: string }).documentId;
+  }
+  return null;
 }
 
 /** Semua nama pasien & dokter selalu huruf kapital (UPPERCASE). */
@@ -585,22 +594,35 @@ async function loadCore(): Promise<Partial<ClinicState>> {
     patientGroups,
     services,
     staff,
-    registrations,
+    registrationsRaw,
     patientsRaw,
     patientAllergyRows,
-    invoices,
+    invoicesRaw,
     medicines,
   ] = await Promise.all([
     fetchAll<Room>(E.rooms, 'createdAt:ASC').catch(() => []),
     fetchAll<PatientGroupItem>(E.patientGroups, 'createdAt:ASC').catch(() => []),
     fetchAll<Service>(E.services, 'createdAt:ASC').catch(() => []),
     fetchAll<Staff>(E.staff, 'createdAt:ASC').catch(() => []),
-    fetchAll<Registration>(E.registrations, 'regDate:DESC').catch(() => []),
+    fetchAll<Registration & { patient?: unknown }>(E.registrations, 'regDate:DESC', ['patient']).catch(() => []),
     fetchAll<Patient>(E.patients, 'createdAt:DESC').catch(() => []),
     fetchChildren<AllergyRow>(E.patientAllergies, 'patient').catch(() => []),
-    fetchAll<Invoice>(E.invoices, 'createdAt:DESC').catch(() => []),
+    fetchAll<Invoice & { patient?: unknown; registration?: unknown }>(E.invoices, 'createdAt:DESC', ['patient', 'registration']).catch(() => []),
     fetchAll<Medicine>(E.medicines, 'createdAt:ASC').catch(() => []),
   ]);
+  // Kunci penghubung diutamakan dari relasi DB (populate), fallback ke kolom string lama.
+  const registrations: Registration[] = registrationsRaw.map((r) => {
+    const { patient, ...rest } = r;
+    return { ...rest, patientId: relDocId(patient) ?? r.patientId };
+  });
+  const invoices: Invoice[] = invoicesRaw.map((r) => {
+    const { patient, registration, ...rest } = r;
+    return {
+      ...rest,
+      patientId: relDocId(patient) ?? r.patientId,
+      visitId: relDocId(registration) ?? r.visitId,
+    };
+  });
   // Alergi tersimpan sebagai baris tabel patient-allergies → rakit ke string[].
   const allergiesByPatient = groupKids(patientAllergyRows);
   const patients: Patient[] = patientsRaw.map((p) => ({
@@ -953,6 +975,9 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
             medicineFee: inv.medicineFee,
             discount: inv.discount,
             total: inv.total,
+            // Relasi: tagihan → pasien & registrasi (kunci string tetap dipertahankan).
+            patient: inv.patientId,
+            registration: inv.visitId,
           },
         });
         const updated: Invoice = {
@@ -976,6 +1001,9 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         patientName: toUpperCase(inv.patientName),
         doctor: toUpperCase(inv.doctor),
         faskes: currentFaskesId(),
+        // Relasi: tagihan → pasien & registrasi (kunci string tetap dipertahankan).
+        patient: inv.patientId,
+        registration: inv.visitId,
       },
     });
     const created = toModel<Invoice>(res.data);
@@ -1027,10 +1055,16 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
 
   const addApotekInvoice = useCallback<ClinicStoreContextValue['addApotekInvoice']>(async (inv) => {
     // Item tersimpan sebagai baris apotek-invoice-items (tanpa JSON).
-    const { items, ...rest } = inv;
+    const { items, patientId, ...rest } = inv;
     const faskesId = currentFaskesId();
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.apotekInvoices, {
-      data: { ...rest, patientName: toUpperCase(inv.patientName), faskes: faskesId },
+      data: {
+        ...rest,
+        patientName: toUpperCase(inv.patientName),
+        faskes: faskesId,
+        // Relasi ke pasien bila pembeli cocok dengan pasien terdaftar (obat bebas bisa tanpa relasi).
+        ...(patientId ? { patient: patientId } : {}),
+      },
     });
     const invoiceId = res.data.documentId;
     const createdItems: ApotekInvoice['items'] = [];
@@ -1041,21 +1075,30 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       });
       createdItems.push({ id: rowId, name: it.name, qty: it.qty, price: it.price });
     }
-    const created: ApotekInvoice = { ...toModel<ApotekInvoice>(res.data), items: createdItems };
+    const created: ApotekInvoice = {
+      ...toModel<ApotekInvoice>(res.data),
+      items: createdItems,
+      ...(patientId ? { patientId } : {}),
+    };
+    setState((s) => ({ ...s, apotekInvoices: [created, ...s.apotekInvoices] }));
+    return created;
     setState((s) => ({ ...s, apotekInvoices: [created, ...s.apotekInvoices] }));
     return created;
   }, []);
 
   const addBooking = useCallback<ClinicStoreContextValue['addBooking']>(async (bk) => {
+    const { patientId, ...rest } = bk;
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.bookings, {
       data: {
-        ...bk,
+        ...rest,
         patientName: toUpperCase(bk.patientName),
         doctor: toUpperCase(bk.doctor),
         faskes: currentFaskesId(),
+        // Relasi ke pasien bila booking terhubung ke pasien terdaftar.
+        ...(patientId ? { patient: patientId } : {}),
       },
     });
-    const created = toModel<Booking>(res.data);
+    const created = { ...toModel<Booking>(res.data), ...(patientId ? { patientId } : {}) };
     setState((s) => ({ ...s, bookings: [created, ...s.bookings] }));
     return created;
   }, []);
@@ -1072,29 +1115,35 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   );
 
   const addLetter = useCallback<ClinicStoreContextValue['addLetter']>(async (l) => {
+    const { patientId, ...rest } = l;
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.letters, {
       data: {
-        ...l,
+        ...rest,
         patientName: toUpperCase(l.patientName),
         doctor: toUpperCase(l.doctor),
         faskes: currentFaskesId(),
+        // Relasi: surat → pasien.
+        ...(patientId ? { patient: patientId } : {}),
       },
     });
-    const created = toModel<Letter>(res.data);
+    const created = { ...toModel<Letter>(res.data), ...(patientId ? { patientId } : {}) };
     setState((s) => ({ ...s, letters: [created, ...s.letters] }));
     return created;
   }, []);
 
   const addReferral = useCallback<ClinicStoreContextValue['addReferral']>(async (r) => {
+    const { patientId, ...rest } = r;
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.referrals, {
       data: {
-        ...r,
+        ...rest,
         patientName: toUpperCase(r.patientName),
         doctor: toUpperCase(r.doctor),
         faskes: currentFaskesId(),
+        // Relasi: rujukan → pasien.
+        ...(patientId ? { patient: patientId } : {}),
       },
     });
-    const created = toModel<Referral>(res.data);
+    const created = { ...toModel<Referral>(res.data), ...(patientId ? { patientId } : {}) };
     setState((s) => ({ ...s, referrals: [created, ...s.referrals] }));
     return created;
   }, []);
