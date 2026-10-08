@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { useSWRConfig } from 'swr';
 import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { Odontogram } from '@/components/rme/Odontogram';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
+import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { ICD10_LIST, ICD9_LIST } from '@/lib/icd';
 import {
   EmrDocument, DiagnosaItem, TindakanItem, AlkesItem, CpptEntry, KondisiGigi,
@@ -26,7 +28,13 @@ const labelCls = 'text-xs font-medium text-slate-600 block mb-1';
 export default function EmrDetailPage() {
   const params = useParams<{ regId: string }>();
   const regId = params.regId;
-  const { state, loading, getOrCreateEmr, updateEmr, addInvoice } = useClinicStore();
+  const { state, loading, getOrCreateEmr, updateEmr, addInvoice, ensureModule } = useClinicStore();
+  const { mutate: mutateGlobal } = useSWRConfig();
+
+  useEffect(() => {
+    ensureModule('emr');
+    ensureModule('pengaturan');
+  }, [ensureModule]);
 
   const reg = state.registrations.find((r) => r.id === regId);
   const patient = state.patients.find((p) => p.id === reg?.patientId);
@@ -59,9 +67,9 @@ export default function EmrDetailPage() {
     return { tindakan, alkes, obat, diskon, total: tindakan + alkes + obat };
   }, [draft]);
 
-  const selesai = () => {
-    void updateEmr(regId, draft);
-    void addInvoice({
+  const selesai = async () => {
+    await updateEmr(regId, draft);
+    await addInvoice({
       visitId: regId,
       patientId: reg?.patientId ?? '',
       patientName: reg?.patientName ?? '',
@@ -76,6 +84,7 @@ export default function EmrDetailPage() {
       total: totals.total + 100000,
       paymentStatus: 'Belum Dibayar',
     });
+    mutateGlobal((key) => typeof key === 'string' && (key.includes(STRAPI_ENDPOINTS.invoices) || key.includes(STRAPI_ENDPOINTS.registrations)));
     setMainTab('riwayat');
   };
 

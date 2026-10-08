@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useSWRConfig } from 'swr';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
+import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import {
   Search, Receipt, Pill, ShieldCheck, Plus, Printer, Banknote, QrCode, CreditCard, Wallet,
 } from 'lucide-react';
@@ -18,8 +20,13 @@ const PAYMENT_METHODS = [
 ] as const;
 
 export default function BillingPage() {
-  const { state, payInvoice, addApotekInvoice } = useClinicStore();
+  const { state, payInvoice, addApotekInvoice, ensureModule } = useClinicStore();
+  const { mutate: mutateGlobal } = useSWRConfig();
   const [tab, setTab] = useState<Tab>('pasien');
+
+  useEffect(() => {
+    ensureModule('billing');
+  }, [ensureModule]);
   const [search, setSearch] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
   const [method, setMethod] = useState<NonNullable<typeof state.invoices[number]['paymentMethod']>>('Tunai');
@@ -438,7 +445,11 @@ export default function BillingPage() {
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
               <button onClick={() => setPaying(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">Batal</button>
               <button
-                onClick={() => { payInvoice(payingInv.id, method, discount); setPaying(null); }}
+                onClick={async () => {
+                  await payInvoice(payingInv.id, method, discount);
+                  mutateGlobal((key) => typeof key === 'string' && (key.includes(STRAPI_ENDPOINTS.invoices) || key.includes(STRAPI_ENDPOINTS.registrations)));
+                  setPaying(null);
+                }}
                 className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition"
               >
                 Konfirmasi Lunas

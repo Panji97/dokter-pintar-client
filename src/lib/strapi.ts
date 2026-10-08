@@ -70,7 +70,7 @@ async function parseBodySafe(res: Response) {
 }
 
 export const useFetch = (
-  url: string,
+  url: string | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   queryParams: any = {},
   options: {
@@ -88,6 +88,10 @@ export const useFetch = (
     const res = await fetch(`${baseUrl()}${urlWithParams}`, {
       headers: authHeaders(),
     });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      throw new Error(errJson?.error?.message || `HTTP ${res.status}`);
+    }
     return res.json();
   };
 
@@ -96,9 +100,11 @@ export const useFetch = (
     encodeValuesOnly: true,
   });
 
-  const fullUrl = queryString ? `${url}?${queryString}` : url;
+  const fullUrl = url ? (queryString ? `${url}?${queryString}` : url) : null;
+  const jwt = typeof window !== 'undefined' ? getLocalStorage('jwt') : null;
+  const swrKey = jwt && fullUrl ? fullUrl : null;
 
-  const { data, error, isLoading, mutate } = useSWR(fullUrl, fetcher, {
+  const { data, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: options.revalidateOnFocus,
     revalidateIfStale: options.revalidateIfStale,
     revalidateOnReconnect: options.revalidateOnReconnect,

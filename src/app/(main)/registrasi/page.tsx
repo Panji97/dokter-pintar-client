@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSWRConfig } from "swr";
 import { Topbar } from "@/components/layout/Topbar";
 import { useShell } from "@/components/layout/AppShell";
-import { useClinicStore } from "@/lib/ClinicStore";
+import { useFetch, usePost } from "@/lib/strapi";
+import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
+import { Patient } from "@/types/clinic";
 import { Search, ClipboardPlus, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 type Tab = "baru" | "lama";
@@ -41,21 +44,42 @@ function shiftDate(refDate: string, y: number, m: number, d: number) {
 }
 
 export default function RegistrasiPage() {
-  const { state, loading, refresh, addPatient, addRegistration } = useClinicStore();
   const { queueOpen, setQueueOpen, setQueueSheetOpen, toast } = useShell();
+  const { mutate: mutateGlobal } = useSWRConfig();
+
+  // SWR API calls langsung per modul (pola HRIS)
+  const { data: roomsRes, isLoading: loadingRooms } = useFetch(STRAPI_ENDPOINTS.rooms, {
+    pagination: { pageSize: 100 },
+    sort: "createdAt:ASC",
+  });
+  const { data: groupsRes, isLoading: loadingGroups } = useFetch(STRAPI_ENDPOINTS.patientGroups, {
+    pagination: { pageSize: 100 },
+    sort: "createdAt:ASC",
+  });
+  const { data: servicesRes, isLoading: loadingServices } = useFetch(STRAPI_ENDPOINTS.services, {
+    pagination: { pageSize: 100 },
+    sort: "createdAt:ASC",
+  });
+  const { data: staffRes, isLoading: loadingStaff } = useFetch(STRAPI_ENDPOINTS.staff, {
+    pagination: { pageSize: 100 },
+    sort: "createdAt:ASC",
+  });
+  const { data: patientsRes, isLoading: loadingPatients, mutate: mutatePatients } = useFetch(
+    STRAPI_ENDPOINTS.patients,
+    { pagination: { pageSize: 100 }, sort: "createdAt:DESC" }
+  );
+
+  const loading = loadingRooms || loadingGroups || loadingServices || loadingStaff;
+
+  const { postData: postPatient } = usePost(STRAPI_ENDPOINTS.patients);
+  const { postData: postRegistration } = usePost(STRAPI_ENDPOINTS.registrations);
+
   const [tab, setTab] = useState<Tab>("baru");
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    if (state.rooms.length === 0 && !loading) {
-      refresh();
-    }
-  }, [state.rooms.length, loading, refresh]);
 
   /** Tampilkan rightbar antrean agar data registrasi baru terlihat. */
   const showQueue = () => {
     if (!queueOpen) setQueueOpen(true);
-    // Di mobile/tablet (<xl) rightbar tampil sebagai drawer — buka otomatis.
     if (
       typeof window !== "undefined" &&
       window.matchMedia("(max-width: 1279px)").matches
@@ -94,29 +118,67 @@ export default function RegistrasiPage() {
     });
   };
 
-  const rooms = state.rooms.map((r) => r.name);
-  const patientGroupOptions = useMemo(
-    () => state.patientGroups.map((g) => g.name),
-    [state.patientGroups],
-  );
-  // Daftar pilihan Pelayanan dari master tarif (Pengaturan → Pelayanan).
-  const serviceOptions = useMemo(
-    () => state.services.map((s) => s.name),
-    [state.services],
-  );
-  const doctorOptions = useMemo(
-    () =>
-      state.staff.filter(
-        (s) => s.role === "Dokter Gigi" || s.role === "Dokter Umum",
-      ),
-    [state.staff],
-  );
+  const rooms = useMemo(() => {
+    const list = ((roomsRes?.data ?? []) as Array<{ name?: string }>);
+    return list.map((r) => r.name || "").filter(Boolean);
+  }, [roomsRes]);
+
+  const patientGroupOptions = useMemo(() => {
+    const list = ((groupsRes?.data ?? []) as Array<{ name?: string }>);
+    return list.map((g) => g.name || "").filter(Boolean);
+  }, [groupsRes]);
+
+  const serviceOptions = useMemo(() => {
+    const list = ((servicesRes?.data ?? []) as Array<{ name?: string }>);
+    return list.map((s) => s.name || "").filter(Boolean);
+  }, [servicesRes]);
+
+  const doctorOptions = useMemo(() => {
+    const list = ((staffRes?.data ?? []) as Array<{ id?: string | number; documentId?: string; name?: string; role?: string }>);
+    return list
+      .filter((s) => s.role === "Dokter Gigi" || s.role === "Dokter Umum")
+      .map((s) => ({
+        id: s.documentId || String(s.id ?? ""),
+        name: s.name || "",
+      }));
+  }, [staffRes]);
+
+  const patientsList = useMemo(() => {
+    const list = ((patientsRes?.data ?? []) as Array<{
+      id?: string | number;
+      documentId?: string;
+      name?: string;
+      title?: string;
+      nik?: string;
+      birthDate?: string;
+      gender?: string;
+      phone?: string;
+      address?: string;
+      bloodType?: string;
+      allergies?: string[];
+      registeredAt?: string;
+    }>);
+    return list.map((p) => ({
+      id: p.documentId || String(p.id ?? ""),
+      name: p.name || "",
+      title: p.title || "",
+      nik: p.nik || "-",
+      birthDate: p.birthDate || "",
+      gender: (p.gender || "L") as "L" | "P",
+      phone: p.phone || "",
+      address: p.address || "",
+      bloodType: (p.bloodType || "-") as "-" | "A" | "B" | "AB" | "O",
+      allergies: p.allergies || [],
+      registeredAt: p.registeredAt || "",
+    }));
+  }, [patientsRes]);
+
   const filteredPatients = useMemo(() => {
     const q = search.toLowerCase();
-    return state.patients.filter(
+    return patientsList.filter(
       (p) => p.name.toLowerCase().includes(q) || p.nik.includes(search),
     );
-  }, [state.patients, search]);
+  }, [patientsList, search]);
 
   // Pagination daftar pasien lama: 4 data per halaman
   const PAGE_SIZE = 4;
@@ -164,31 +226,42 @@ export default function RegistrasiPage() {
     if (saving) return;
     setSaving(true);
     try {
-      const patient = await addPatient({
-        name: form.name,
-        title: form.title || undefined,
-        nik: form.nik || "-",
-        birthDate: form.birthDate || form.regDate,
-        gender: form.gender as "L" | "P",
-        phone: "",
-        address: form.address,
-        bloodType: "-",
-        allergies: [],
+      const patRes = await postPatient({
+        data: {
+          name: form.name.trim().toUpperCase(),
+          title: form.title || undefined,
+          nik: form.nik || "-",
+          birthDate: form.birthDate || form.regDate,
+          gender: form.gender as "L" | "P",
+          phone: "",
+          address: form.address,
+          bloodType: "-",
+          allergies: [],
+          registeredAt: new Date().toISOString().slice(0, 10),
+        },
       });
-      await addRegistration({
-        patientId: patient.id,
-        patientName: patient.name,
-        group: form.group as never,
-        serviceType: form.serviceType,
-        room: form.room,
-        doctor: form.doctor,
-        regDate: form.regDate
-          ? new Date(`${form.regDate}T00:00:00`).toISOString()
-          : undefined,
+      const patientDocId = patRes?.data?.documentId ?? String(patRes?.data?.id ?? "");
+
+      await postRegistration({
+        data: {
+          patientId: patientDocId,
+          patientName: form.name.trim().toUpperCase(),
+          group: form.group,
+          serviceType: form.serviceType,
+          room: form.room,
+          doctor: form.doctor,
+          regDate: form.regDate
+            ? new Date(`${form.regDate}T00:00:00`).toISOString()
+            : new Date().toISOString(),
+          status: "Registrasi",
+        },
       });
-      // Tetap di halaman registrasi — data tampil di rightbar antrean.
+
+      mutatePatients();
+      mutateGlobal((key) => typeof key === "string" && key.includes(STRAPI_ENDPOINTS.registrations));
+
       toast(
-        `${patient.name} berhasil diregistrasi ke ${form.room}. Data antrean tampil di panel kanan.`,
+        `${form.name.trim().toUpperCase()} berhasil diregistrasi ke ${form.room}. Data antrean tampil di panel kanan.`,
       );
       setForm((f) => ({
         ...f,
@@ -198,10 +271,14 @@ export default function RegistrasiPage() {
         birthDate: "",
         address: "",
         nik: "",
+        group: "",
+        room: "",
+        serviceType: "",
+        doctor: "",
       }));
       showQueue();
     } catch (err) {
-      toast(`Gagal menyimpan: ${err instanceof Error ? err.message : 'periksa koneksi internet'}`);
+      toast(`Gagal menyimpan: ${err instanceof Error ? err.message : "periksa koneksi internet"}`);
     } finally {
       setSaving(false);
     }
@@ -218,7 +295,7 @@ export default function RegistrasiPage() {
     doctor: "",
   });
   const regModalPatient = regModalPatientId
-    ? (state.patients.find((x) => x.id === regModalPatientId) ?? null)
+    ? (patientsList.find((x) => x.id === regModalPatientId) ?? null)
     : null;
 
   const openRegModal = (patientId: string) => {
@@ -250,22 +327,28 @@ export default function RegistrasiPage() {
       return;
     }
     try {
-      await addRegistration({
-        patientId: regModalPatient.id,
-        patientName: regModalPatient.name,
-        group: modalForm.group as never,
-        serviceType: modalForm.serviceType,
-        room: modalForm.room,
-        doctor: modalForm.doctor,
+      await postRegistration({
+        data: {
+          patientId: regModalPatient.id,
+          patientName: regModalPatient.name,
+          group: modalForm.group,
+          serviceType: modalForm.serviceType,
+          room: modalForm.room,
+          doctor: modalForm.doctor,
+          regDate: new Date().toISOString(),
+          status: "Registrasi",
+        },
       });
-      // Tetap di halaman registrasi — data tampil di rightbar antrean.
+
+      mutateGlobal((key) => typeof key === "string" && key.includes(STRAPI_ENDPOINTS.registrations));
+
       toast(
         `${regModalPatient.name} berhasil diregistrasi ke ${modalForm.room}. Data antrean tampil di panel kanan.`,
       );
       setRegModalPatientId(null);
       showQueue();
     } catch (err) {
-      toast(`Gagal menyimpan: ${err instanceof Error ? err.message : 'periksa koneksi internet'}`);
+      toast(`Gagal menyimpan: ${err instanceof Error ? err.message : "periksa koneksi internet"}`);
     }
   };
 
@@ -452,10 +535,11 @@ export default function RegistrasiPage() {
                       </select>
                     </div>
                     <div className="md:col-span-6">
-                      <label className={labelCls}>
+                      <label htmlFor="patient-name" className={labelCls}>
                         Nama Lengkap <span className="text-rose-500">*</span>
                       </label>
                       <input
+                        id="patient-name"
                         value={form.name}
                         onChange={(e) =>
                           setForm({ ...form, name: e.target.value })

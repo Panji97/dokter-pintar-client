@@ -49,8 +49,8 @@ export interface Registration {
   serviceType: string; // e.g. "Pelayanan Dokter Gigi Umum"
   room: string;
   doctor: string;
-  /** 'Registrasi' = belum ada rekam medis, 'Proses' = sudah ada EMR */
-  status: 'Registrasi' | 'Proses';
+  /** 'Registrasi' = belum ada rekam medis, 'Proses' = sudah ada EMR, 'Selesai' = sudah bayar */
+  status: 'Registrasi' | 'Proses' | 'Selesai';
 }
 
 /* ============ BOOKING ============ */

@@ -81,9 +81,51 @@ export const eraseCookie = (name: string) => {
   }
 };
 
+export const setSessionStorage = (key: string, value: string) => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      /* abaikan */
+    }
+  }
+};
+
+export const getSessionStorage = (key: string): string | null => {
+  if (typeof window !== 'undefined') {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+export const removeSessionStorage = (key: string) => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      /* abaikan */
+    }
+  }
+};
+
+export const clearSessionStorage = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.clear();
+    } catch {
+      /* abaikan */
+    }
+  }
+};
+
 /** Hapus sesi Strapi (mirror AppTopbar logout di HRIS). */
 export function clearStrapiSession() {
   eraseCookie('jwt');
   removeLocalStorage('jwt');
   removeLocalStorage('user');
+  clearSessionStorage();
 }

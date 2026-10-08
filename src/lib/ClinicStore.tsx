@@ -8,7 +8,7 @@ import {
   PatientGroupItem,
 } from '@/types/clinic';
 import { STRAPI_ENDPOINTS } from './strapi-endpoints';
-import { getLocalStorage } from './storage';
+import { getLocalStorage, getSessionStorage, setSessionStorage, removeSessionStorage } from './storage';
 import { logout, getSession } from './auth';
 import { STRAPI_SESSION_EVENT } from './strapi';
 
@@ -198,6 +198,8 @@ interface ClinicStoreContextValue {
   loading: boolean;
   /** Muat ulang seluruh state dari server. */
   refresh: () => Promise<void>;
+  /** Muat modul data tambahan secara on-demand (lazy load). */
+  ensureModule: (mod: 'farmasi' | 'billing' | 'surat' | 'pengaturan' | 'emr' | 'all') => Promise<void>;
   /** Tambah registrasi baru (Pasien Baru atau Pasien Lama) */
   addRegistration: (reg: Omit<Registration, 'id' | 'status' | 'regDate'> & { regDate?: string }) => Promise<Registration>;
   addPatient: (p: Omit<Patient, 'id' | 'registeredAt'>) => Promise<Patient>;
@@ -222,177 +224,271 @@ interface ClinicStoreContextValue {
 
 const ClinicStoreContext = createContext<ClinicStoreContextValue | null>(null);
 
-async function loadState(): Promise<ClinicState> {
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 menit
+
+interface StoredCache {
+  at: number;
+  state: ClinicState;
+  loaded: Record<string, number>;
+}
+
+function getStoredCache(key: string | null): StoredCache | null {
+  if (!key) return null;
+  const raw = getSessionStorage(`dpi_cache_${key}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as StoredCache;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredCache(key: string | null, state: ClinicState, loaded: Record<string, number>) {
+  if (!key) return;
+  setSessionStorage(`dpi_cache_${key}`, JSON.stringify({ at: Date.now(), state, loaded }));
+}
+
+const inflight = new Map<string, Promise<unknown>>();
+
+async function loadCore(): Promise<Partial<ClinicState>> {
   const token = getLocalStorage('jwt');
-  if (!token) return EMPTY_STATE;
+  if (!token) return {};
   const E = STRAPI_ENDPOINTS;
-  const [patients, registrations, bookings, emrDocs, invoices, apotekInvoices, claims,
-    letters, referrals, medicines, suppliers, factories, brands, penerimaan, pengeluaran,
-    penyesuaian, retur, rooms, patientGroups, services, packages, discounts, staff, schedules] = await Promise.all([
-    fetchAll<Patient>(E.patients, 'createdAt:DESC'),
-    fetchAll<Registration>(E.registrations, 'regDate:DESC'),
-    fetchAll<Booking>(E.bookings, 'createdAt:DESC'),
-    fetchAll<EmrDocument>(E.emrDocuments, 'createdAt:DESC'),
-    fetchAll<Invoice>(E.invoices, 'createdAt:DESC'),
-    fetchAll<ApotekInvoice>(E.apotekInvoices, 'createdAt:DESC'),
-    fetchAll<InsuranceClaim>(E.insuranceClaims, 'createdAt:DESC'),
-    fetchAll<Letter>(E.letters, 'createdAt:DESC'),
-    fetchAll<Referral>(E.referrals, 'createdAt:DESC'),
-    fetchAll<Medicine>(E.medicines, 'createdAt:ASC'),
-    fetchAll<Supplier>(E.suppliers, 'createdAt:ASC'),
-    fetchAll<Factory>(E.factories, 'createdAt:ASC'),
-    fetchAll<Brand>(E.brands, 'createdAt:ASC'),
-    fetchAll<Penerimaan>(E.penerimaan, 'createdAt:DESC'),
-    fetchAll<Pengeluaran>(E.pengeluaran, 'createdAt:DESC'),
-    fetchAll<Penyesuaian>(E.penyesuaian, 'createdAt:DESC'),
-    fetchAll<Retur>(E.retur, 'createdAt:DESC'),
-    fetchAll<Room>(E.rooms, 'createdAt:ASC'),
+  const [
+    rooms,
+    patientGroups,
+    services,
+    staff,
+    registrations,
+    patients,
+    invoices,
+    medicines,
+  ] = await Promise.all([
+    fetchAll<Room>(E.rooms, 'createdAt:ASC').catch(() => []),
     fetchAll<PatientGroupItem>(E.patientGroups, 'createdAt:ASC').catch(() => []),
-    fetchAll<Service>(E.services, 'createdAt:ASC'),
-    fetchAll<ServicePackage>(E.servicePackages, 'createdAt:ASC'),
-    fetchAll<ServiceDiscount>(E.serviceDiscounts, 'createdAt:ASC'),
-    fetchAll<Staff>(E.staff, 'createdAt:ASC'),
-    fetchAll<StaffSchedule>(E.staffSchedules, 'createdAt:ASC'),
+    fetchAll<Service>(E.services, 'createdAt:ASC').catch(() => []),
+    fetchAll<Staff>(E.staff, 'createdAt:ASC').catch(() => []),
+    fetchAll<Registration>(E.registrations, 'regDate:DESC').catch(() => []),
+    fetchAll<Patient>(E.patients, 'createdAt:DESC').catch(() => []),
+    fetchAll<Invoice>(E.invoices, 'createdAt:DESC').catch(() => []),
+    fetchAll<Medicine>(E.medicines, 'createdAt:ASC').catch(() => []),
   ]);
-  // Booking memakai createdAt bawaan Strapi.
-  const bookingsFixed = bookings.map((b) => ({
-    ...b,
-    createdAt: (b as unknown as { createdAt?: string }).createdAt ?? new Date().toISOString(),
-  }));
-  const emr: Record<string, EmrDocument> = {};
-  for (const d of emrDocs) emr[d.regId] = d;
   return {
-    patients, registrations, bookings: bookingsFixed, emr, invoices, apotekInvoices,
-    claims, letters, referrals, medicines, suppliers, factories, brands, penerimaan,
-    pengeluaran, penyesuaian, retur, rooms, patientGroups, services, packages, discounts, staff, schedules,
+    rooms,
+    patientGroups,
+    services,
+    staff,
+    registrations,
+    patients,
+    invoices,
+    medicines,
   };
 }
 
-const CACHE_TTL_MS = 45_000;
-/** Cache per faskes: kunjungan ulang dalam TTL tidak menyentuh jaringan. */
-const stateCache = new Map<string, { at: number; state: ClinicState }>();
-const inflight = new Map<string, Promise<ClinicState>>();
-
-function cacheKey(): string | null {
-  return currentFaskesIdSafe();
-}
-
-/** Muat state; pakai cache bila masih segar, dedupe request bersamaan. */
-async function loadStateCached(force = false): Promise<ClinicState> {
+async function loadModuleData(mod: string): Promise<Partial<ClinicState>> {
   const token = getLocalStorage('jwt');
-  if (!token) return EMPTY_STATE;
-  const key = cacheKey();
-  if (key && !force) {
-    const hit = stateCache.get(key);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.state;
-    const ongoing = inflight.get(key);
-    if (ongoing) return ongoing;
-  }
-  const p = loadState().then((s) => {
-    if (key) stateCache.set(key, { at: Date.now(), state: s });
-    return s;
-  });
-  if (key) {
-    inflight.set(key, p);
-    const cleanup = () => {
-      if (inflight.get(key) === p) inflight.delete(key);
-    };
-    p.then(cleanup, cleanup);
-  }
-  return p;
-}
-
-/** Simpan state terbaru ke cache agar mutasi langsung terlihat di semua halaman. */
-function syncCache(state: ClinicState) {
-  try {
-    const key = cacheKey();
-    if (key) stateCache.set(key, { at: Date.now(), state });
-  } catch {
-    /* abaikan */
+  if (!token) return {};
+  const E = STRAPI_ENDPOINTS;
+  switch (mod) {
+    case 'farmasi': {
+      const [suppliers, factories, brands, penerimaan, pengeluaran, penyesuaian, retur] =
+        await Promise.all([
+          fetchAll<Supplier>(E.suppliers, 'createdAt:ASC').catch(() => []),
+          fetchAll<Factory>(E.factories, 'createdAt:ASC').catch(() => []),
+          fetchAll<Brand>(E.brands, 'createdAt:ASC').catch(() => []),
+          fetchAll<Penerimaan>(E.penerimaan, 'createdAt:DESC').catch(() => []),
+          fetchAll<Pengeluaran>(E.pengeluaran, 'createdAt:DESC').catch(() => []),
+          fetchAll<Penyesuaian>(E.penyesuaian, 'createdAt:DESC').catch(() => []),
+          fetchAll<Retur>(E.retur, 'createdAt:DESC').catch(() => []),
+        ]);
+      return { suppliers, factories, brands, penerimaan, pengeluaran, penyesuaian, retur };
+    }
+    case 'surat': {
+      const [letters, referrals] = await Promise.all([
+        fetchAll<Letter>(E.letters, 'createdAt:DESC').catch(() => []),
+        fetchAll<Referral>(E.referrals, 'createdAt:DESC').catch(() => []),
+      ]);
+      return { letters, referrals };
+    }
+    case 'billing': {
+      const [apotekInvoices, claims] = await Promise.all([
+        fetchAll<ApotekInvoice>(E.apotekInvoices, 'createdAt:DESC').catch(() => []),
+        fetchAll<InsuranceClaim>(E.insuranceClaims, 'createdAt:DESC').catch(() => []),
+      ]);
+      return { apotekInvoices, claims };
+    }
+    case 'pengaturan': {
+      const [packages, discounts, schedules] = await Promise.all([
+        fetchAll<ServicePackage>(E.servicePackages, 'createdAt:ASC').catch(() => []),
+        fetchAll<ServiceDiscount>(E.serviceDiscounts, 'createdAt:ASC').catch(() => []),
+        fetchAll<StaffSchedule>(E.staffSchedules, 'createdAt:ASC').catch(() => []),
+      ]);
+      return { packages, discounts, schedules };
+    }
+    case 'emr': {
+      const emrDocs = await fetchAll<EmrDocument>(E.emrDocuments, 'createdAt:DESC').catch(() => []);
+      const emr: Record<string, EmrDocument> = {};
+      for (const d of emrDocs) emr[d.regId] = d;
+      return { emr };
+    }
+    case 'all': {
+      const [farmasi, surat, billing, pengaturan, emr] = await Promise.all([
+        loadModuleData('farmasi'),
+        loadModuleData('surat'),
+        loadModuleData('billing'),
+        loadModuleData('pengaturan'),
+        loadModuleData('emr'),
+      ]);
+      return { ...farmasi, ...surat, ...billing, ...pengaturan, ...emr };
+    }
+    default:
+      return {};
   }
 }
 
 export function ClinicStoreProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<ClinicState>(EMPTY_STATE);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<ClinicState>(() => {
+    const key = currentFaskesIdSafe();
+    const cached = getStoredCache(key);
+    return cached?.state ?? EMPTY_STATE;
+  });
+
+  const [loadedModules, setLoadedModules] = useState<Record<string, number>>(() => {
+    const key = currentFaskesIdSafe();
+    const cached = getStoredCache(key);
+    return cached?.loaded ?? {};
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    const key = currentFaskesIdSafe();
+    const cached = getStoredCache(key);
+    if (!cached) return true;
+    return Date.now() - cached.at > CACHE_TTL_MS;
+  });
+
+  const syncCache = useCallback(
+    (newState: ClinicState, newLoaded?: Record<string, number>) => {
+      const key = currentFaskesIdSafe();
+      if (key) {
+        saveStoredCache(key, newState, newLoaded ?? loadedModules);
+      }
+    },
+    [loadedModules],
+  );
+
+  const ensureModule = useCallback(
+    async (mod: 'farmasi' | 'billing' | 'surat' | 'pengaturan' | 'emr' | 'all') => {
+      const key = currentFaskesIdSafe();
+      if (!key) return;
+
+      const lastLoaded = loadedModules[mod];
+      if (lastLoaded && Date.now() - lastLoaded < CACHE_TTL_MS) {
+        return; // Cache module masih segar, skip network call
+      }
+
+      const inflightKey = `${key}_mod_${mod}`;
+      let p = inflight.get(inflightKey) as Promise<Partial<ClinicState>> | undefined;
+      if (!p) {
+        p = loadModuleData(mod).finally(() => inflight.delete(inflightKey));
+        inflight.set(inflightKey, p);
+      }
+
+      try {
+        const modData = await p;
+        if (modData && Object.keys(modData).length > 0) {
+          setLoadedModules((prev) => {
+            const nextLoaded = { ...prev, [mod]: Date.now() };
+            setState((prevSt) => {
+              const nextSt = { ...prevSt, ...modData };
+              saveStoredCache(key, nextSt, nextLoaded);
+              return nextSt;
+            });
+            return nextLoaded;
+          });
+        }
+      } catch (err) {
+        console.warn('ensureModule error:', mod, err);
+      }
+    },
+    [loadedModules],
+  );
+
+  const fetchCore = useCallback(
+    async (force = false) => {
+      const key = currentFaskesIdSafe();
+      const token = getLocalStorage('jwt');
+      if (!token || !key) return;
+
+      if (!force) {
+        const cached = getStoredCache(key);
+        if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+          return; // Cache core masih segar, skip network call
+        }
+      }
+
+      const inflightKey = `${key}_core`;
+      let p = inflight.get(inflightKey) as Promise<Partial<ClinicState>> | undefined;
+      if (!p) {
+        p = loadCore().finally(() => inflight.delete(inflightKey));
+        inflight.set(inflightKey, p);
+      }
+
+      const coreData = await p;
+      if (coreData) {
+        setState((prev) => {
+          const next = { ...prev, ...coreData };
+          saveStoredCache(key, next, loadedModules);
+          return next;
+        });
+      }
+    },
+    [loadedModules],
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setState(await loadStateCached(true));
+      const key = currentFaskesIdSafe();
+      if (!key) return;
+
+      const core = await loadCore();
+      const loadedKeys = Object.keys(loadedModules);
+      const modPromises = loadedKeys.map((k) => loadModuleData(k));
+      const modResults = await Promise.all(modPromises);
+      const mergedMods = Object.assign({}, ...modResults);
+
+      setState((prev) => {
+        const next = { ...prev, ...core, ...mergedMods };
+        const now = Date.now();
+        const nextLoaded: Record<string, number> = {};
+        for (const k of loadedKeys) nextLoaded[k] = now;
+        setLoadedModules(nextLoaded);
+        saveStoredCache(key, next, nextLoaded);
+        return next;
+      });
     } catch {
-      // Sesi basi (ada sesi app tapi tanpa JWT) — paksa login ulang.
-      // Pengunjung publik (tanpa sesi) dibiarkan: AuthGuard yang menjaga rute privat.
       if (getSession() && !getLocalStorage('jwt')) {
         logout();
         if (typeof window !== 'undefined') window.location.href = '/login';
-        return;
       }
     } finally {
       setLoading(false);
     }
+  }, [loadedModules]);
+
+  useEffect(() => {
+    setLoading(false);
   }, []);
 
-  // Tulis ke cache setiap state berubah (hasil mutasi) agar konsisten.
+  // Simpan state terbaru ke sessionStorage setiap kali state berubah
   useEffect(() => {
-    if (!loading) syncCache(state);
-  }, [state, loading]);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadStateCached().then(
-      (s) => {
-        if (!cancelled) {
-          setState(s);
-          setLoading(false);
-        }
-      },
-      () => {
-        if (!cancelled) {
-          if (getSession() && !getLocalStorage('jwt')) {
-            logout();
-            if (typeof window !== 'undefined') window.location.href = '/login';
-          }
-          setLoading(false);
-        }
-      },
-    );
-
-    const onAuthChange = () => {
-      loadStateCached(true)
-        .then((s) => {
-          if (!cancelled) {
-            setState(s);
-            setLoading(false);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setLoading(false);
-        });
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener(STRAPI_SESSION_EVENT, onAuthChange);
-      window.addEventListener('storage', onAuthChange);
-    }
-
-    return () => {
-      cancelled = true;
-      if (typeof window !== 'undefined') {
-        window.removeEventListener(STRAPI_SESSION_EVENT, onAuthChange);
-        window.removeEventListener('storage', onAuthChange);
+    if (!loading) {
+      const key = currentFaskesIdSafe();
+      if (key) {
+        saveStoredCache(key, state, loadedModules);
       }
-    };
-  }, []);
-
-  // Pastikan data dimuat bila token & faskes valid tapi state rooms masih kosong
-  useEffect(() => {
-    const token = getLocalStorage('jwt');
-    const faskesId = currentFaskesIdSafe();
-    if (token && faskesId && state.rooms.length === 0 && !loading) {
-      refresh();
     }
-  }, [state.rooms.length, loading, refresh]);
+  }, [state, loading, loadedModules]);
 
   const addPatient = useCallback<ClinicStoreContextValue['addPatient']>(async (p) => {
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.patients, {
@@ -495,6 +591,23 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
           paidAt: new Date().toISOString().slice(0, 10),
         },
       });
+
+      // Update registrasi kunjungan terkait menjadi status Selesai
+      if (inv?.visitId) {
+        try {
+          await api('PUT', `${STRAPI_ENDPOINTS.registrations}/${inv.visitId}`, {
+            data: { status: 'Selesai' },
+          });
+          setState((s) => ({
+            ...s,
+            registrations: s.registrations.map((r) =>
+              r.id === inv.visitId ? { ...r, status: 'Selesai' } : r
+            ),
+          }));
+        } catch {
+          /* abaikan */
+        }
+      }
       setState((s) => ({
         ...s,
         invoices: s.invoices.map((x) =>
@@ -644,6 +757,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       state,
       loading,
       refresh,
+      ensureModule,
       addRegistration,
       addPatient,
       getOrCreateEmr,
@@ -665,7 +779,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       resetAll,
     }),
     [
-      state, loading, refresh, addRegistration, addPatient, getOrCreateEmr, updateEmr,
+      state, loading, refresh, ensureModule, addRegistration, addPatient, getOrCreateEmr, updateEmr,
       addInvoice, payInvoice, addApotekInvoice, addBooking, updateBookingStatus,
       addLetter, addReferral, updateMedicineStock, addPenyesuaian, updateRoom, addRoom,
       removeRoom, addStaff, toggleStaffActive, resetAll,

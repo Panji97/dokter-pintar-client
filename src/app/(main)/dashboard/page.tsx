@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah } from '@/lib/ClinicStore';
 import {
-  Users, TrendingUp, Stethoscope, Activity, CalendarClock, ChevronDown,
+  Stethoscope, ReceiptText, AlertTriangle, CalendarClock, ChevronDown,
 } from 'lucide-react';
 
 /** ===== Dashboard FasKes: KPI + grafik kunjungan/pendapatan + 3 besar penyakit ===== */
@@ -48,30 +48,67 @@ function DashboardFasKes() {
   const stokMenipis = state.medicines.filter((m) => m.stock <= m.minStock).length;
 
   const kpis = [
-    { label: 'Kunjungan Hari Ini', value: String(kunjunganHariIni), accent: 'text-teal-600', href: '/registrasi' },
+    {
+      label: 'Kunjungan Hari Ini',
+      value: String(kunjunganHariIni),
+      accent: 'text-teal-600',
+      icon: Stethoscope,
+      iconCls: 'text-teal-600',
+      sub: 'Registrasi hari ini',
+      href: '/registrasi',
+    },
     {
       label: 'Tagihan Tertunda',
       value: fmtRupiah(tagihanTertunda.reduce((s, i) => s + i.total, 0)),
       accent: 'text-rose-600',
+      icon: ReceiptText,
+      iconCls: 'text-rose-500',
+      sub: `${tagihanTertunda.length} invoice tertunda`,
       href: '/billing',
     },
-    { label: 'Stok Menipis', value: String(stokMenipis), accent: 'text-amber-600', href: '/farmasi' },
+    {
+      label: 'Stok Menipis',
+      value: String(stokMenipis),
+      accent: 'text-amber-600',
+      icon: AlertTriangle,
+      iconCls: 'text-amber-500',
+      sub: 'Di bawah batas minimum',
+      href: '/farmasi',
+    },
   ];
 
   return (
     <div className="space-y-5">
-      {/* KPI live */}
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
+      {/* KPI live — Mobile: 3 ubin mini sejajar (sama seperti Billing/Farmasi) */}
+      <div className="md:hidden grid grid-cols-3 gap-2">
         {kpis.map((k) => (
           <a
             key={k.label}
             href={k.href}
-            className="group bg-white rounded-xl border border-slate-200 p-4 md:p-5 shadow-sm hover:border-teal-300 hover:shadow-md transition"
+            className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 min-w-0 block"
           >
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{k.label}</div>
-            <div className={`text-xl md:text-2xl font-extrabold mt-1.5 ${k.accent} group-hover:scale-[1.02] transition-transform origin-left`}>
+            <k.icon className={`w-3.5 h-3.5 ${k.iconCls} shrink-0`} />
+            <div className={`mt-1 text-[13px] font-bold truncate ${k.accent}`}>{k.value}</div>
+            <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold truncate">{k.label}</div>
+          </a>
+        ))}
+      </div>
+      {/* KPI live — Desktop: 3 kartu */}
+      <div className="hidden md:grid md:grid-cols-3 gap-4">
+        {kpis.map((k) => (
+          <a
+            key={k.label}
+            href={k.href}
+            className="group bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:border-teal-300 hover:shadow-md transition min-w-0"
+          >
+            <div className="flex items-center gap-2 mb-2 min-w-0">
+              <k.icon className={`w-4 h-4 shrink-0 ${k.iconCls}`} />
+              <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold truncate">{k.label}</span>
+            </div>
+            <div className={`text-2xl font-bold truncate ${k.accent} group-hover:scale-[1.02] transition-transform origin-left`}>
               {k.value}
             </div>
+            <div className="text-xs text-slate-400 mt-1 truncate">{k.sub}</div>
           </a>
         ))}
       </div>

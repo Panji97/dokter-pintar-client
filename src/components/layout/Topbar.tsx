@@ -8,9 +8,27 @@ import { BrandLogo } from './BrandLogo';
 import { LogoLink } from './LogoLink';
 import { ThemeToggle } from './ThemeToggle';
 import { useClinicStore, fmtRupiah } from '@/lib/ClinicStore';
+import { useFetch } from '@/lib/strapi';
+import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+/** Tanggal lokal YYYY-MM-DD (hindari bug UTC: toISOString bisa mundur 1 hari di WIB). */
+function getLocalDateStr(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Ambil tanggal lokal YYYY-MM-DD dari ISO datetime (regDate disimpan tengah malam lokal). */
+function toLocalDateStr(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return getLocalDateStr(d);
+}
 
 interface TopbarProps {
   title: string;
@@ -29,6 +47,15 @@ export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { state } = useClinicStore();
+
+  const { data: regsRes } = useFetch(STRAPI_ENDPOINTS.registrations, {
+    pagination: { pageSize: 100 },
+    sort: 'regDate:DESC',
+  });
+  const { data: invsRes } = useFetch(STRAPI_ENDPOINTS.invoices, {
+    pagination: { pageSize: 100 },
+    sort: 'createdAt:DESC',
+  });
 
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -60,12 +87,17 @@ export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
   );
   const notifCount = pendingInvoices.length + lowStock.length + pendingResep.length;
 
-  // Registrasi hari sebelumnya yang belum diproses (pengganti tab "Diagnosa Transaksi Tertunda").
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const pendingQueue = useMemo(
-    () => state.registrations.filter((r) => r.regDate.slice(0, 10) !== todayIso).length,
-    [state.registrations, todayIso]
-  );
+  // Antrean hari ini (tanggal lokal) — diisi setelah mount agar SSR & hidrasi identik,
+  // badge tampil persis seperti badge notifikasi (hanya bila count > 0).
+  const [todayStr, setTodayStr] = useState('');
+  useEffect(() => {
+    setTodayStr(getLocalDateStr());
+  }, []);
+  const queueCountToday = useMemo(() => {
+    if (!todayStr) return 0;
+    const list = ((regsRes?.data ?? []) as Array<{ regDate?: string }>);
+    return list.filter((r) => toLocalDateStr(r.regDate || '') === todayStr).length;
+  }, [regsRes, todayStr]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -184,9 +216,9 @@ export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
           className="xl:hidden relative p-2 rounded-lg hover:bg-slate-100 transition outline-none text-slate-600"
         >
           <PanelRight className="w-5 h-5" />
-          {pendingQueue > 0 && (
+          {queueCountToday > 0 && (
             <span suppressHydrationWarning className="absolute top-1 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
-              {pendingQueue > 9 ? '9+' : pendingQueue}
+              {queueCountToday > 9 ? '9+' : queueCountToday}
             </span>
           )}
         </button>
@@ -205,9 +237,9 @@ export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
           }`}
         >
           <PanelRight className="w-5 h-5" />
-          {pendingQueue > 0 && (
+          {queueCountToday > 0 && (
             <span suppressHydrationWarning className="absolute top-1 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
-              {pendingQueue > 9 ? '9+' : pendingQueue}
+              {queueCountToday > 9 ? '9+' : queueCountToday}
             </span>
           )}
         </button>
