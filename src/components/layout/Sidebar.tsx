@@ -162,7 +162,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               {session?.role ?? "Belum masuk"}
             </div>
           </div>
-          <LogOut className="w-4 h-4 text-slate-600 shrink-0 group-hover/user:text-rose-400 transition" />
+          <LogOut className="w-4 h-4 text-rose-400/80 shrink-0 group-hover/user:text-rose-300 transition" />
         </button>
       </div>
     </aside>

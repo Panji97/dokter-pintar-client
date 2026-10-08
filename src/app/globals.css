@@ -122,27 +122,39 @@
   /* ---- Aksen primer (teal) di atas permukaan gelap ---- */
   .dark .text-teal-700 { color: #5eead4; }
   .dark .text-teal-600 { color: #2dd4bf; }
+  .dark .text-teal-800 { color: #99f6e4; }
   .dark .bg-teal-50 { background-color: rgb(19 78 74 / 0.45); }
   .dark .bg-teal-100 { background-color: rgb(19 78 74 / 0.55); }
+  .dark .bg-teal-50\/70 { background-color: rgb(19 78 74 / 0.55); }
+  .dark .bg-teal-50\/60 { background-color: rgb(19 78 74 / 0.5); }
+  .dark .bg-teal-50\/50 { background-color: rgb(19 78 74 / 0.45); }
+  .dark .hover\:bg-teal-50:hover { background-color: rgb(19 78 74 / 0.6); }
+  .dark .border-teal-400 { border-color: rgb(45 212 191 / 0.6); }
   .dark .focus\:ring-teal-100:focus { --tw-ring-color: rgb(45 212 191 / 0.2); }
 
   /* ---- Badge status pastel → versi gelap ---- */
   .dark .bg-emerald-100 { background-color: rgb(6 78 59 / 0.5); }
   .dark .bg-amber-100 { background-color: rgb(120 53 15 / 0.5); }
+  .dark .bg-amber-50 { background-color: rgb(120 53 15 / 0.35); }
   .dark .bg-rose-100 { background-color: rgb(136 19 55 / 0.5); }
+  .dark .bg-rose-50 { background-color: rgb(136 19 55 / 0.35); }
   .dark .bg-blue-100 { background-color: rgb(30 58 138 / 0.55); }
   .dark .bg-blue-50 { background-color: rgb(30 58 138 / 0.45); }
   .dark .bg-emerald-50 { background-color: rgb(6 78 59 / 0.4); }
+  .dark .text-emerald-800 { color: #a7f3d0; }
   .dark .text-emerald-700 { color: #6ee7b7; }
   .dark .text-emerald-600 { color: #34d399; }
   .dark .text-amber-700 { color: #fcd34d; }
   .dark .text-amber-600 { color: #fbbf24; }
+  .dark .text-amber-500 { color: #fbbf24; }
   .dark .text-rose-700 { color: #fda4af; }
   .dark .text-rose-600 { color: #fb7185; }
+  .dark .text-rose-500 { color: #fb7185; }
   .dark .text-blue-700 { color: #93c5fd; }
   .dark .text-blue-600 { color: #60a5fa; }
   .dark .border-blue-100 { border-color: rgb(30 58 138 / 0.6); }
   .dark .border-amber-100 { border-color: rgb(120 53 15 / 0.6); }
+  .dark .border-emerald-200 { border-color: rgb(6 95 70 / 0.7); }
 
   /* ---- Lainnya ---- */
   .dark .ring-white { --tw-ring-color: #0f172a; }

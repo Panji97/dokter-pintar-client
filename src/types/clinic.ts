@@ -148,17 +148,6 @@ export interface ResepApotek {
   date?: string;
 }
 
-export interface CpptEntry {
-  id: string;
-  datetime: string; // ISO
-  ppa: string;
-  profesi: string;
-  subjektif: string;
-  objektif: string;
-  asesmen: string;
-  plan: string;
-}
-
 export interface EmrDocument {
   regId: string;
   anamnesaUmum: AnamnesaUmum;
@@ -171,7 +160,6 @@ export interface EmrDocument {
   alkes: AlkesItem[];
   resepApotek: ResepApotek[];
   resepRujukan: ResepApotek[];
-  cppt: CpptEntry[];
   /** Dokumen medis yang sudah diisi */
   dokumen: {
     generalConsent: boolean;

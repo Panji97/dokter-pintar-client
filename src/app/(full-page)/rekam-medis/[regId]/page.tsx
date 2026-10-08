@@ -1,23 +1,24 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
 import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
+import { useShell } from '@/components/layout/AppShell';
 import { Odontogram } from '@/components/rme/Odontogram';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { ICD10_LIST, ICD9_LIST } from '@/lib/icd';
 import {
-  EmrDocument, DiagnosaItem, TindakanItem, AlkesItem, CpptEntry, KondisiGigi,
+  EmrDocument, DiagnosaItem, TindakanItem, AlkesItem, KondisiGigi,
 } from '@/types/clinic';
 import {
   Plus, Trash2, FileText, Upload, FileCheck, FileSignature, ShieldCheck, ClipboardCheck,
-  StickyNote,
+  History,
 } from 'lucide-react';
 
-type MainTab = 'riwayat' | 'so' | 'ap' | 'p' | 'cppt';
+type MainTab = 'riwayat' | 'so' | 'ap' | 'p';
 type SoTab = 'anamnesa-umum' | 'anamnesa-odonto' | 'pemeriksaan' | 'foto';
 type ApTab = 'dokumen' | 'kondisi' | 'diagnosa' | 'tindakan' | 'alkes';
 type PTab = 'apotek' | 'rujukan';
@@ -28,8 +29,10 @@ const labelCls = 'text-xs font-medium text-slate-600 block mb-1';
 export default function EmrDetailPage() {
   const params = useParams<{ regId: string }>();
   const regId = params.regId;
+  const router = useRouter();
   const { state, loading, getOrCreateEmr, updateEmr, addInvoice, ensureModule } = useClinicStore();
   const { mutate: mutateGlobal } = useSWRConfig();
+  const { toast } = useShell();
 
   useEffect(() => {
     ensureModule('emr');
@@ -39,17 +42,38 @@ export default function EmrDetailPage() {
   const reg = state.registrations.find((r) => r.id === regId);
   const patient = state.patients.find((p) => p.id === reg?.patientId);
   const doc = getOrCreateEmr(regId);
+  // Entri tersimpan (stabil referensinya) — undefined selama modul EMR memuat.
+  const storedDoc = reg ? state.emr[regId] : undefined;
 
   const [mainTab, setMainTab] = useState<MainTab>('riwayat');
   const [soTab, setSoTab] = useState<SoTab>('anamnesa-umum');
   const [apTab, setApTab] = useState<ApTab>('dokumen');
   const [pTab, setPTab] = useState<PTab>('apotek');
+  // Tanggal lokal hari ini (diisi setelah mount agar SSR & hidrasi identik).
+  const [todayStr, setTodayStr] = useState('');
+  useEffect(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    setTodayStr(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+  }, []);
   const [draft, setDraft] = useState<EmrDocument>(doc);
   // Sinkronkan draft saat data tiba (store memuat async).
   const [draftFor, setDraftFor] = useState<string | null>(null);
+  // Objek draft terakhir hasil sinkronisasi — untuk bedakan "belum diubah
+  // user" vs "sudah diedit". Sinkronisasi ulang hanya bila masih murni.
+  const lastSynced = useRef<EmrDocument | null>(null);
   if (!loading && reg && draftFor !== regId) {
     setDraft(doc);
     setDraftFor(regId);
+    lastSynced.current = doc;
+  } else if (
+    !loading && reg && draftFor === regId && storedDoc &&
+    lastSynced.current !== storedDoc && draft === lastSynced.current
+  ) {
+    // Modul EMR selesai dimuat belakangan (dokumen tersimpan tiba setelah
+    // draft blank dibuat) → sinkronkan ulang sekali, tanpa menimpa editan.
+    setDraft(storedDoc);
+    lastSynced.current = storedDoc;
   }
 
   // form state untuk tambah entitas
@@ -57,7 +81,6 @@ export default function EmrDetailPage() {
   const [newDiag, setNewDiag] = useState<DiagnosaItem>({ id: '', type: 'Diagnosa dokter', icd10Code: '', icd10Desc: '' });
   const [newTindakan, setNewTindakan] = useState<TindakanItem>({ id: '', code: 'PK0053', name: 'JPKM', tooth: '-', qty: 1, price: 350000, discount: 0 });
   const [newAlkes, setNewAlkes] = useState<AlkesItem>({ id: '', code: 'BHP5', name: 'ALKES 5', qty: 1, price: 95000 });
-  const [newCppt, setNewCppt] = useState<CpptEntry>({ id: '', datetime: new Date().toISOString().slice(0, 16), ppa: reg?.doctor ?? '', profesi: 'Dokter Gigi', subjektif: '', objektif: '', asesmen: '', plan: '' });
 
   const totals = useMemo(() => {
     const tindakan = draft.tindakan.reduce((s, t) => s + t.qty * t.price - t.discount, 0);
@@ -106,6 +129,15 @@ export default function EmrDetailPage() {
 
   const regDate = fmtDateTime(reg.regDate);
 
+  /** "Sesi ini" hanya untuk kunjungan yang terdaftar di antrean hari ini. */
+  const toLocalDateStr = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+  const isTodayVisit = todayStr !== '' && toLocalDateStr(reg.regDate) === todayStr;
+
   const subTabCls = (active: boolean) =>
     `px-4 py-2 rounded-lg text-xs font-medium transition border shrink-0 whitespace-nowrap ${
       active ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -119,22 +151,25 @@ export default function EmrDetailPage() {
       {/* Header pasien */}
       <div className="px-4 md:px-6 pt-4">
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-3 md:grid-cols-3 xl:grid-cols-6">
             {[
               ['Nama Pasien', reg.patientName],
+              ['Grup Pasien', reg.group],
+              ['Poli', reg.room],
+              ['Pelayanan', reg.serviceType],
               ['Tgl. Registrasi', regDate.date],
               ['Dokter', reg.doctor],
             ].map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between gap-3 md:block">
-                <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider shrink-0">{label}</div>
-                <div className="text-sm font-semibold text-slate-800 md:mt-0.5 truncate text-right md:text-left">{value}</div>
+              <div key={label} className="min-w-0">
+                <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">{label}</div>
+                <div className="text-sm font-semibold text-slate-800 mt-0.5 truncate" title={value}>{value}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Tab utama */}
+      {/* Tab utama — satu baris scroll horizontal di semua ukuran layar */}
       <div className="px-4 md:px-6 pt-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {([
@@ -142,7 +177,6 @@ export default function EmrDetailPage() {
             ['so', 'Catatan FasKes (SO)'],
             ['ap', 'Diagnosa & Tindakan (AP)'],
             ['p', 'Resep (P)'],
-            ['cppt', 'CPPT'],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -177,42 +211,68 @@ export default function EmrDetailPage() {
         {/* ============ TAB RIWAYAT ============ */}
         {mainTab === 'riwayat' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-100">
+            <div className="px-5 py-4 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Riwayat Medis Pasien</h2>
+              {/* Pilih kunjungan pasien — form di bawah mengikuti pilihan ini */}
+              <label className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2 text-xs font-medium text-slate-600">
+                <span className="inline-flex items-center gap-1.5 text-slate-500">
+                  <History className="w-3.5 h-3.5 shrink-0" />
+                  Kunjungan pasien ({state.registrations.filter((r) => r.patientId === reg.patientId).length})
+                </span>
+                <select
+                  value={regId}
+                  aria-label="Pilih kunjungan pasien yang dibuka"
+                  onChange={(e) => {
+                    if (e.target.value === regId) return;
+                    const target = state.registrations.find((r) => r.id === e.target.value);
+                    if (target) toast(`Membuka kunjungan ${fmtDate(target.regDate)} · ${target.serviceType}. Form di bawah mengikuti kunjungan ini.`);
+                    router.push(`/rekam-medis/${e.target.value}`);
+                  }}
+                  className="w-full sm:w-auto px-2.5 py-2 text-xs border border-slate-300 rounded-lg outline-none focus:border-teal-400 bg-white sm:max-w-64"
+                >
+                  {[...state.registrations]
+                    .filter((r) => r.patientId === reg.patientId)
+                    .sort((a, b) => b.regDate.localeCompare(a.regDate))
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {fmtDate(r.regDate)} · {r.serviceType}{r.id === regId ? ' (buka)' : ''}
+                      </option>
+                    ))}
+                </select>
+              </label>
             </div>
             <div className="p-4 md:p-5">
               {/* Mobile: kartu riwayat */}
               <div className="md:hidden space-y-3">
                 {state.registrations
-                  .filter((r) => r.patientId === reg.patientId && state.emr[r.id])
+                  .filter((r) => r.patientId === reg.patientId)
                   .map((r) => {
-                    const emr = state.emr[r.id];
+                    const emr = r.id === regId ? draft : state.emr[r.id];
+                    const isCurrentSession = r.id === regId && isTodayVisit;
+                    const isOpened = r.id === regId;
                     return (
-                      <div key={r.id} className="rounded-xl border border-slate-200 p-3.5">
+                      <div key={r.id} className={`rounded-xl border p-3.5 transition ${isOpened ? 'border-teal-400 bg-teal-50/60 shadow-sm' : 'border-slate-200'}`}>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-semibold text-slate-800">{fmtDate(r.regDate)}</span>
-                          <Link
-                            href={`/rekam-medis/${r.id}`}
-                            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition"
-                          >
-                            <FileText className="w-3 h-3" /> Buka
-                          </Link>
+                          {isCurrentSession ? (
+                            <span className="shrink-0 whitespace-nowrap text-[11px] text-teal-700 font-bold bg-teal-100 px-2 py-0.5 rounded-full">Sesi ini — sedang diubah</span>
+                          ) : isOpened ? (
+                            <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-600 font-bold bg-slate-200 px-2 py-0.5 rounded-full">Sedang dibuka</span>
+                          ) : (
+                            <Link
+                              href={`/rekam-medis/${r.id}`}
+                              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition"
+                            >
+                              <FileText className="w-3 h-3" /> Buka
+                            </Link>
+                          )}
                         </div>
                         <div className="mt-1.5 text-sm font-medium text-slate-800">{r.serviceType}</div>
-                        <div className="text-[11px] text-slate-500">{emr.diagnosa[0]?.icd10Desc ?? '—'}</div>
+                        <div className="text-[11px] text-slate-500">{emr?.diagnosa[0]?.icd10Desc ?? '—'}</div>
                         <div className="text-[11px] text-slate-400">{r.doctor}</div>
                       </div>
                     );
                   })}
-                <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-3.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-800">{regDate.date}</span>
-                    <span className="text-[11px] text-teal-600 font-semibold">Sesi ini</span>
-                  </div>
-                  <div className="mt-1.5 text-sm font-medium text-slate-800">{reg.serviceType}</div>
-                  <div className="text-[11px] text-slate-500">{draft.diagnosa[0]?.icd10Desc ?? '—'}</div>
-                  <div className="text-[11px] text-slate-400">{reg.doctor}</div>
-                </div>
               </div>
               {/* Desktop: tabel */}
               <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
@@ -227,35 +287,34 @@ export default function EmrDetailPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {state.registrations
-                    .filter((r) => r.patientId === reg.patientId && state.emr[r.id])
+                    .filter((r) => r.patientId === reg.patientId)
                     .map((r) => {
-                      const emr = state.emr[r.id];
+                      const emr = r.id === regId ? draft : state.emr[r.id];
+                      const isCurrentSession = r.id === regId && isTodayVisit;
+                      const isOpened = r.id === regId;
                       return (
-                        <tr key={r.id} className="hover:bg-slate-50 transition">
+                        <tr key={r.id} className={`transition ${isOpened ? 'bg-teal-50/70 hover:bg-teal-50' : 'hover:bg-slate-50'}`}>
                           <td className="px-4 py-3 text-xs text-slate-600">{fmtDate(r.regDate)}</td>
                           <td className="px-4 py-3 text-xs text-slate-600">{r.serviceType}</td>
-                          <td className="px-4 py-3 text-xs text-slate-700">{emr.diagnosa[0]?.icd10Desc ?? '—'}</td>
+                          <td className="px-4 py-3 text-xs text-slate-700">{emr?.diagnosa[0]?.icd10Desc ?? '—'}</td>
                           <td className="px-4 py-3 text-xs text-slate-600">{r.doctor}</td>
                           <td className="px-4 py-3 text-right">
-                            <Link
-                              href={`/rekam-medis/${r.id}`}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition"
-                            >
-                              <FileText className="w-3 h-3" /> Buka
-                            </Link>
+                            {isCurrentSession ? (
+                              <span className="text-[11px] text-teal-700 font-bold bg-teal-100 px-2 py-0.5 rounded-full">Sesi ini — sedang diubah</span>
+                            ) : isOpened ? (
+                              <span className="text-[11px] text-slate-600 font-bold bg-slate-200 px-2 py-0.5 rounded-full">Sedang dibuka</span>
+                            ) : (
+                              <Link
+                                href={`/rekam-medis/${r.id}`}
+                                className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition"
+                              >
+                                <FileText className="w-3 h-3" /> Buka
+                              </Link>
+                            )}
                           </td>
                         </tr>
                       );
                     })}
-                  <tr>
-                    <td className="px-4 py-3 text-xs text-slate-600">{regDate.date}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{reg.serviceType}</td>
-                    <td className="px-4 py-3 text-xs text-slate-700">{draft.diagnosa[0]?.icd10Desc ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{reg.doctor}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-[11px] text-teal-600 font-semibold">Sesi ini</span>
-                    </td>
-                  </tr>
                 </tbody>
               </table></div>
               {state.registrations.filter((r) => r.patientId === reg.patientId && state.emr[r.id]).length === 0 && (
@@ -982,130 +1041,6 @@ export default function EmrDetailPage() {
           </div>
         )}
 
-        {/* ============ TAB CPPT ============ */}
-        {mainTab === 'cppt' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
-              <h2 className="font-bold text-slate-800 text-sm">Tambah CPPT (Catatan Perkembangan Pasien Terintegrasi)</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div>
-                  <label className={labelCls}>Tanggal & Waktu</label>
-                  <input type="datetime-local" value={newCppt.datetime.slice(0, 16)} onChange={(e) => setNewCppt({ ...newCppt, datetime: e.target.value })} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>PPA</label>
-                  <input value={newCppt.ppa} onChange={(e) => setNewCppt({ ...newCppt, ppa: e.target.value })} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Profesi</label>
-                  <select value={newCppt.profesi} onChange={(e) => setNewCppt({ ...newCppt, profesi: e.target.value })} className={inputCls}>
-                    {['Dokter Gigi', 'Dokter', 'Perawat', 'Apoteker'].map((p) => <option key={p}>{p}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {([
-                  ['subjektif', 'Subjektif'],
-                  ['objektif', 'Objektif'],
-                  ['asesmen', 'Asesmen'],
-                  ['plan', 'Plan'],
-                ] as const).map(([key, label]) => (
-                  <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <textarea rows={2} value={newCppt[key]} onChange={(e) => setNewCppt({ ...newCppt, [key]: e.target.value })} className={inputCls} />
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => {
-                  if (!newCppt.subjektif && !newCppt.asesmen) return;
-                  setDraft({ ...draft, cppt: [{ ...newCppt, id: `cp-${Date.now()}` }, ...draft.cppt] });
-                  setNewCppt({ id: '', datetime: new Date().toISOString().slice(0, 16), ppa: reg.doctor, profesi: 'Dokter Gigi', subjektif: '', objektif: '', asesmen: '', plan: '' });
-                }}
-                className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-lg transition"
-              >
-                <Plus className="w-3.5 h-3.5" /> Tambah CPPT
-              </button>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              {/* Mobile: kartu CPPT */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {draft.cppt.map((c) => {
-                  const dt = fmtDateTime(c.datetime);
-                  return (
-                    <div key={c.id} className="px-4 py-3.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-800">{dt.date} · {dt.time}</div>
-                          <div className="text-[11px] text-slate-500">{c.ppa} — {c.profesi}</div>
-                        </div>
-                        <button
-                          onClick={() => setDraft({ ...draft, cppt: draft.cppt.filter((x) => x.id !== c.id) })}
-                          aria-label="Hapus CPPT"
-                          className="text-rose-500 hover:text-rose-700 shrink-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="mt-2 space-y-1 text-xs text-slate-600">
-                        <div><b>S:</b> {c.subjektif || '—'}</div>
-                        <div><b>O:</b> {c.objektif || '—'}</div>
-                        <div><b>A:</b> {c.asesmen || '—'}</div>
-                        <div><b>P:</b> {c.plan || '—'}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {draft.cppt.length === 0 && (
-                  <p className="px-4 py-8 text-center text-xs text-slate-400">Belum ada catatan CPPT.</p>
-                )}
-              </div>
-              {/* Desktop: tabel */}
-              <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
-                    <th className="px-4 py-3 font-semibold">Tanggal dan Waktu</th>
-                    <th className="px-4 py-3 font-semibold">Profesi Pemberi Asuhan (PPA)</th>
-                    <th className="px-4 py-3 font-semibold">Catatan SOAP</th>
-                    <th className="px-4 py-3 font-semibold text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {draft.cppt.map((c) => {
-                    const dt = fmtDateTime(c.datetime);
-                    return (
-                      <tr key={c.id} className="hover:bg-slate-50 transition">
-                        <td className="px-4 py-3 text-xs text-slate-600">
-                          {dt.date}
-                          <span className="inline-flex items-center gap-1 ml-2 text-slate-400"><StickyNote className="w-3 h-3" />{dt.time}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-slate-800 text-xs font-semibold">{c.ppa}</div>
-                          <div className="text-[11px] text-slate-400">{c.profesi}</div>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-600 max-w-md">
-                          <div><b>S:</b> {c.subjektif || '—'}</div>
-                          <div><b>O:</b> {c.objektif || '—'}</div>
-                          <div><b>A:</b> {c.asesmen || '—'}</div>
-                          <div><b>P:</b> {c.plan || '—'}</div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button onClick={() => setDraft({ ...draft, cppt: draft.cppt.filter((x) => x.id !== c.id) })} className="text-rose-500 hover:text-rose-700">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {draft.cppt.length === 0 && (
-                    <tr><td colSpan={4} className="px-4 py-8 text-center text-xs text-slate-400">Belum ada catatan CPPT.</td></tr>
-                  )}
-                </tbody>
-              </table></div>
-            </div>
-          </div>
-        )}
       </main>
     </>
   );

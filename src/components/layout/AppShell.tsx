@@ -144,10 +144,10 @@ export function ShellProvider({
           </SheetContent>
         </Sheet>
 
-        {/* Sheet rightbar antrean (mobile/tablet) */}
+        {/* Sheet rightbar antrean (mobile/tablet) — tanpa kartu agar lega */}
         <Sheet open={queueSheetOpen} onOpenChange={setQueueSheetOpen}>
-          <SheetContent side="right" className="w-80 max-w-[85vw] gap-0 p-4 overflow-y-auto" showCloseButton={false}>
-            <QueueSidebar />
+          <SheetContent side="right" className="w-80 max-w-[85vw] gap-0 p-3 overflow-y-auto" showCloseButton={false}>
+            <QueueSidebar bare />
           </SheetContent>
         </Sheet>
 

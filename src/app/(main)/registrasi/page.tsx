@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import { Topbar } from "@/components/layout/Topbar";
 import { useShell } from "@/components/layout/AppShell";
-import { useFetch, usePost } from "@/lib/strapi";
+import { useFetch } from "@/lib/strapi";
+import { useClinicStore } from "@/lib/ClinicStore";
 import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
-import { Patient } from "@/types/clinic";
+import { Patient, PatientGroup } from "@/types/clinic";
 import { Search, ClipboardPlus, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 type Tab = "baru" | "lama";
@@ -71,8 +72,8 @@ export default function RegistrasiPage() {
 
   const loading = loadingRooms || loadingGroups || loadingServices || loadingStaff;
 
-  const { postData: postPatient } = usePost(STRAPI_ENDPOINTS.patients);
-  const { postData: postRegistration } = usePost(STRAPI_ENDPOINTS.registrations);
+  // Tulis via ClinicStore agar state global ikut mutakhir (sumber kebenaran tunggal).
+  const { addPatient, addRegistration } = useClinicStore();
 
   const [tab, setTab] = useState<Tab>("baru");
   const [search, setSearch] = useState("");
@@ -226,35 +227,28 @@ export default function RegistrasiPage() {
     if (saving) return;
     setSaving(true);
     try {
-      const patRes = await postPatient({
-        data: {
-          name: form.name.trim().toUpperCase(),
-          title: form.title || undefined,
-          nik: form.nik || "-",
-          birthDate: form.birthDate || form.regDate,
-          gender: form.gender as "L" | "P",
-          phone: "",
-          address: form.address,
-          bloodType: "-",
-          allergies: [],
-          registeredAt: new Date().toISOString().slice(0, 10),
-        },
+      const created = await addPatient({
+        name: form.name.trim(),
+        title: form.title || "",
+        nik: form.nik || "-",
+        birthDate: form.birthDate || form.regDate,
+        gender: form.gender as "L" | "P",
+        phone: "",
+        address: form.address,
+        bloodType: "-",
+        allergies: [],
       });
-      const patientDocId = patRes?.data?.documentId ?? String(patRes?.data?.id ?? "");
 
-      await postRegistration({
-        data: {
-          patientId: patientDocId,
-          patientName: form.name.trim().toUpperCase(),
-          group: form.group,
-          serviceType: form.serviceType,
-          room: form.room,
-          doctor: form.doctor,
-          regDate: form.regDate
-            ? new Date(`${form.regDate}T00:00:00`).toISOString()
-            : new Date().toISOString(),
-          status: "Registrasi",
-        },
+      await addRegistration({
+        patientId: created.id,
+        patientName: form.name.trim(),
+        group: form.group as PatientGroup,
+        serviceType: form.serviceType,
+        room: form.room,
+        doctor: form.doctor,
+        regDate: form.regDate
+          ? new Date(`${form.regDate}T00:00:00`).toISOString()
+          : new Date().toISOString(),
       });
 
       mutatePatients();
@@ -289,6 +283,7 @@ export default function RegistrasiPage() {
     null,
   );
   const [modalForm, setModalForm] = useState({
+    regDate: todayStr,
     group: "",
     room: "",
     serviceType: "",
@@ -300,6 +295,7 @@ export default function RegistrasiPage() {
 
   const openRegModal = (patientId: string) => {
     setModalForm({
+      regDate: todayStr,
       group: "",
       room: "",
       serviceType: "",
@@ -327,17 +323,16 @@ export default function RegistrasiPage() {
       return;
     }
     try {
-      await postRegistration({
-        data: {
-          patientId: regModalPatient.id,
-          patientName: regModalPatient.name,
-          group: modalForm.group,
-          serviceType: modalForm.serviceType,
-          room: modalForm.room,
-          doctor: modalForm.doctor,
-          regDate: new Date().toISOString(),
-          status: "Registrasi",
-        },
+      await addRegistration({
+        patientId: regModalPatient.id,
+        patientName: regModalPatient.name,
+        group: modalForm.group as PatientGroup,
+        serviceType: modalForm.serviceType,
+        room: modalForm.room,
+        doctor: modalForm.doctor,
+        regDate: modalForm.regDate
+          ? new Date(`${modalForm.regDate}T00:00:00`).toISOString()
+          : new Date().toISOString(),
       });
 
       mutateGlobal((key) => typeof key === "string" && key.includes(STRAPI_ENDPOINTS.registrations));
@@ -791,6 +786,18 @@ export default function RegistrasiPage() {
               </button>
             </div>
             <div className="space-y-3">
+              <div>
+                <label className={labelCls}>Tgl. Registrasi</label>
+                <input
+                  type="date"
+                  value={modalForm.regDate}
+                  max={todayStr}
+                  onChange={(e) =>
+                    setModalForm({ ...modalForm, regDate: e.target.value })
+                  }
+                  className={inputCls}
+                />
+              </div>
               <div>
                 <label className={labelCls}>Grup Pasien</label>
                 <select

@@ -2,20 +2,25 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  Registration, Booking, EmrDocument, Invoice, Patient, Letter, Referral, Medicine,
+  Registration, Booking, EmrDocument, AnamnesaUmum, AnamnesaOdontogram, PemeriksaanUmum,
+  KondisiGigi, DiagnosaItem, TindakanItem, AlkesItem, OdontogramMap, ToothState,
+  ToothCondition, ResepApotek, Invoice, Patient, Letter, Referral, Medicine,
   ApotekInvoice, InsuranceClaim, Room, Service, ServicePackage, ServiceDiscount, Staff,
   StaffSchedule, Supplier, Factory, Brand, Penerimaan, Pengeluaran, Penyesuaian, Retur,
   PatientGroupItem,
 } from '@/types/clinic';
 import { STRAPI_ENDPOINTS } from './strapi-endpoints';
-import { getLocalStorage, getSessionStorage, setSessionStorage, removeSessionStorage } from './storage';
+import { getLocalStorage } from './storage';
 import { logout, getSession } from './auth';
 import { STRAPI_SESSION_EVENT } from './strapi';
 
 /**
- * ClinicStore — SELURUH data dari Strapi (tidak ada mock / localStorage data),
- * disekat per faskes: semua baca difilter faskes user, semua tulis dikaitkan
- * ke faskes user (pola tenant HRIS: user.company/client).
+ * ClinicStore — SELURUH data langsung dari Strapi API (tanpa cache storage).
+ * - Baca: selalu fetch fresh dari server, disekat per faskes
+ *   (pola tenant HRIS: user.company/client).
+ * - Tulis: POST/PUT/DELETE langsung ke database, state memori diperbarui
+ *   dari respons server.
+ * - Auth (JWT/sesi user) tetap di localStorage — itu kredensial, bukan data.
  */
 
 const apiBase = () => process.env.NEXT_PUBLIC_STRAPI_URL ?? '';
@@ -113,6 +118,351 @@ async function fetchAll<T>(endpoint: string, sort: string): Promise<T[]> {
 /** Semua nama pasien & dokter selalu huruf kapital (UPPERCASE). */
 export const toUpperCase = (s: string) => s.toUpperCase();
 
+/* ============================================================
+ * Persistensi relasional (tanpa kolom JSON): tiap baris anak punya
+ * tabel/endpoint sendiri, kolom skalar tersimpan per kolom.
+ * Bentuk UI (EmrDocument, Penerimaan, ...) TIDAK berubah — yang
+ * berubah hanya cara baca/tulis ke Strapi: dirakit/dipisah di sini.
+ * ============================================================ */
+
+/** Baris anak + documentId induknya (didapat via populate). */
+type ChildRow<T> = T & { __parent: string | null };
+
+/** Ambil semua baris anak se-faskes beserta documentId induknya. */
+async function fetchChildren<T>(endpoint: string, parentAttr: string, sort = 'createdAt:ASC'): Promise<ChildRow<T>[]> {
+  const faskesId = currentFaskesId();
+  const out: ChildRow<T>[] = [];
+  let page = 1;
+  for (;;) {
+    const params = new URLSearchParams({
+      'pagination[page]': String(page),
+      'pagination[pageSize]': '100',
+      sort,
+      'filters[faskes][documentId][$eq]': faskesId,
+      [`populate[${parentAttr}][fields][0]`]: 'documentId',
+    });
+    const res = await api<StrapiList>('GET', `${endpoint}?${params.toString()}`);
+    for (const e of res.data ?? []) {
+      const parent = e[parentAttr] as { documentId?: string } | null | undefined;
+      out.push({ ...toModel<T>(e), __parent: parent?.documentId ?? null });
+    }
+    const pageCount = res.meta?.pagination?.pageCount ?? 1;
+    if (page >= pageCount) break;
+    page += 1;
+  }
+  return out;
+}
+
+/** Kelompokkan baris anak per documentId induk (buang penanda __parent). */
+function groupKids<T>(rows: ChildRow<T>[]): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    if (!r.__parent) continue;
+    const { __parent, ...rest } = r;
+    void __parent;
+    const arr = m.get(r.__parent) ?? [];
+    arr.push(rest as T);
+    m.set(r.__parent, arr);
+  }
+  return m;
+}
+
+/** Hapus semua baris anak milik satu induk (dipakai sebelum tulis ulang). */
+async function clearChildren(endpoint: string, parentAttr: string, parentDocId: string) {
+  const params = new URLSearchParams({
+    'pagination[pageSize]': '100',
+    [`filters[${parentAttr}][documentId][$eq]`]: parentDocId,
+  });
+  const res = await api<StrapiList>('GET', `${endpoint}?${params.toString()}`).catch(() => null);
+  const rows = res?.data ?? [];
+  await Promise.all(
+    rows.map((e) => api('DELETE', `${endpoint}/${e.documentId}`).catch(() => null)),
+  );
+}
+
+async function postRow(endpoint: string, data: Record<string, unknown>): Promise<string> {
+  const res = await api<{ data: StrapiEntity }>('POST', endpoint, { data });
+  return res.data.documentId;
+}
+
+/* ---------- Bentuk baris tiap tabel anak ---------- */
+
+interface KondisiRow { id: string; toothNumber: number | null; deskripsi: string | null; }
+interface OdontoRow {
+  id: string; toothNumber: number; condition: string;
+  surfaceTop: string | null; surfaceBottom: string | null; surfaceLeft: string | null;
+  surfaceRight: string | null; surfaceCenter: string | null; notes: string | null;
+}
+interface DiagnosaRow { id: string; tipe: string | null; icd10Code: string | null; icd10Desc: string | null; }
+interface TindakanRow { id: string; code: string | null; name: string | null; tooth: string | null; qty: number; price: number; discount: number; }
+interface AlkesRow { id: string; code: string | null; name: string | null; qty: number; price: number; }
+interface ResepRow { id: string; jenis: 'apotek' | 'rujukan'; urutan: number; }
+interface ResepItemRow { id: string; code: string | null; name: string | null; qty: number; price: number; }
+interface AllergyRow { id: string; alergen: string; keterangan: string | null; }
+interface PenerimaanItemRow { id: string; code: string | null; name: string | null; qty: number; price: number; batch: string | null; expiry: string | null; }
+interface PenyesuaianItemRow { id: string; code: string | null; name: string | null; stockBefore: number; stockAfter: number; reason: string | null; }
+interface ReturItemRow { id: string; code: string | null; name: string | null; qty: number; reason: string | null; }
+interface ApotekItemRow { id: string; code: string | null; name: string | null; qty: number; price: number; }
+
+/** Kolom skalar emr-documents (tambah `id` = documentId). */
+interface EmrDocScalars {
+  id: string;
+  regId: string;
+  [key: string]: unknown;
+}
+
+const s = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+/** EmrDocument -> payload kolom skalar (tanpa relasi). */
+function emrScalars(doc: EmrDocument): Record<string, unknown> {
+  const a: AnamnesaUmum = doc.anamnesaUmum;
+  const o: AnamnesaOdontogram = doc.anamnesaOdontogram;
+  const p: PemeriksaanUmum = doc.pemeriksaanUmum;
+  return {
+    regId: doc.regId,
+    riwayatPenyakit: a.riwayatPenyakit,
+    keluhanUtama: a.keluhanUtama,
+    keluhanTambahan: a.keluhanTambahan,
+    penyakitSaatIni: a.penyakitSaatIni,
+    gravida: a.gravida,
+    alergiGatal: a.alergi.gatal,
+    alergiDebu: a.alergi.debu,
+    alergiObat: a.alergi.obat,
+    alergiMakanan: a.alergi.makanan,
+    alergiLainnya: a.alergi.lainnya,
+    alergiUdara: a.alergi.udara,
+    occlusi: o.occlusi,
+    torusPlatinus: o.torusPlatinus,
+    torusMandibularis: o.torusMandibularis,
+    palatum: o.palatum,
+    diastema: o.diastema,
+    gigiAnomali: o.gigiAnomali,
+    odontoLain: o.lainLain,
+    deskripsiPemeriksaan: p.deskripsi,
+    nadi: p.nadi,
+    tensiSistolik: p.tensiSistolik,
+    tensiDiastolik: p.tensiDiastolik,
+    suhu: p.suhu,
+    beratBadan: p.beratBadan,
+    tinggiBadan: p.tinggiBadan,
+    pernapasan: p.pernapasan,
+    mata: p.mata,
+    gigiMulut: p.gigiMulut,
+    kulit: p.kulit,
+    dokumenGeneralConsent: doc.dokumen.generalConsent,
+    dokumenAsesmenAwal: doc.dokumen.asesmenAwal,
+    dokumenInformedConsent: doc.dokumen.informedConsent,
+    dokumenAsesmenPraTindakan: doc.dokumen.asesmenPraTindakan,
+    dokumenSurgicalSafety: doc.dokumen.surgicalSafety,
+    photoCount: doc.photoCount,
+  };
+}
+
+interface EmrKids {
+  kondisi: ChildRow<KondisiRow>[];
+  odonto: ChildRow<OdontoRow>[];
+  diagnosa: ChildRow<DiagnosaRow>[];
+  tindakan: ChildRow<TindakanRow>[];
+  alkes: ChildRow<AlkesRow>[];
+  reseps: ChildRow<ResepRow>[];
+  resepItems: ChildRow<ResepItemRow>[];
+}
+
+/** Rakit EmrDocument penuh dari kolom skalar + baris-baris anak. */
+function assembleEmr(docs: EmrDocScalars[], kids: EmrKids): Record<string, EmrDocument> {
+  const byKondisi = groupKids(kids.kondisi);
+  const byOdonto = groupKids(kids.odonto);
+  const byDiagnosa = groupKids(kids.diagnosa);
+  const byTindakan = groupKids(kids.tindakan);
+  const byAlkes = groupKids(kids.alkes);
+  const byResep = groupKids(kids.reseps);
+  const itemsByResep = groupKids(kids.resepItems);
+  const emr: Record<string, EmrDocument> = {};
+  for (const d of docs) {
+    const reseps = (byResep.get(d.id) ?? []).sort((a, b) => a.urutan - b.urutan);
+    const toResep = (jenis: 'apotek' | 'rujukan'): ResepApotek[] =>
+      reseps
+        .filter((r) => r.jenis === jenis)
+        .map((r) => ({
+          items: (itemsByResep.get(r.id) ?? []).map((it) => ({
+            id: it.id,
+            code: it.code ?? '',
+            name: it.name ?? '',
+            qty: it.qty ?? 0,
+            price: it.price ?? 0,
+          })),
+        }));
+    const odontogram: OdontogramMap = {};
+    for (const g of byOdonto.get(d.id) ?? []) {
+      const surfaces: ToothState['surfaces'] = {};
+      if (g.surfaceTop) surfaces.top = g.surfaceTop as ToothCondition;
+      if (g.surfaceBottom) surfaces.bottom = g.surfaceBottom as ToothCondition;
+      if (g.surfaceLeft) surfaces.left = g.surfaceLeft as ToothCondition;
+      if (g.surfaceRight) surfaces.right = g.surfaceRight as ToothCondition;
+      if (g.surfaceCenter) surfaces.center = g.surfaceCenter as ToothCondition;
+      odontogram[g.toothNumber] = {
+        toothNumber: g.toothNumber,
+        condition: (g.condition || 'healthy') as ToothCondition,
+        ...(Object.keys(surfaces).length > 0 ? { surfaces } : {}),
+        ...(g.notes ? { notes: g.notes } : {}),
+      };
+    }
+    const doc: EmrDocument & { id: string } = {
+      id: d.id,
+      regId: d.regId,
+      anamnesaUmum: {
+        riwayatPenyakit: s(d.riwayatPenyakit),
+        keluhanUtama: s(d.keluhanUtama),
+        keluhanTambahan: s(d.keluhanTambahan),
+        penyakitSaatIni: s(d.penyakitSaatIni),
+        gravida: s(d.gravida),
+        alergi: {
+          gatal: s(d.alergiGatal),
+          debu: s(d.alergiDebu),
+          obat: s(d.alergiObat),
+          makanan: s(d.alergiMakanan),
+          lainnya: s(d.alergiLainnya),
+          udara: s(d.alergiUdara),
+        },
+      },
+      anamnesaOdontogram: {
+        occlusi: s(d.occlusi),
+        torusPlatinus: s(d.torusPlatinus),
+        torusMandibularis: s(d.torusMandibularis),
+        palatum: s(d.palatum),
+        diastema: s(d.diastema),
+        gigiAnomali: s(d.gigiAnomali),
+        lainLain: s(d.odontoLain),
+      },
+      pemeriksaanUmum: {
+        deskripsi: s(d.deskripsiPemeriksaan),
+        nadi: s(d.nadi),
+        tensiSistolik: s(d.tensiSistolik),
+        tensiDiastolik: s(d.tensiDiastolik),
+        suhu: s(d.suhu),
+        beratBadan: s(d.beratBadan),
+        tinggiBadan: s(d.tinggiBadan),
+        pernapasan: s(d.pernapasan),
+        mata: s(d.mata),
+        gigiMulut: s(d.gigiMulut),
+        kulit: s(d.kulit),
+      },
+      kondisi: (byKondisi.get(d.id) ?? []).map((k): KondisiGigi => ({
+        id: k.id,
+        toothNumber: k.toothNumber,
+        deskripsi: k.deskripsi ?? '',
+      })),
+      odontogram,
+      diagnosa: (byDiagnosa.get(d.id) ?? []).map((x): DiagnosaItem => ({
+        id: x.id,
+        type: (x.tipe === 'Asuhan keperawatan' ? 'Asuhan keperawatan' : 'Diagnosa dokter'),
+        icd10Code: x.icd10Code ?? '',
+        icd10Desc: x.icd10Desc ?? '',
+      })),
+      tindakan: (byTindakan.get(d.id) ?? []).map((x): TindakanItem => ({
+        id: x.id,
+        code: x.code ?? '',
+        name: x.name ?? '',
+        tooth: x.tooth ?? '-',
+        qty: x.qty ?? 1,
+        price: x.price ?? 0,
+        discount: x.discount ?? 0,
+      })),
+      alkes: (byAlkes.get(d.id) ?? []).map((x): AlkesItem => ({
+        id: x.id,
+        code: x.code ?? '',
+        name: x.name ?? '',
+        qty: x.qty ?? 1,
+        price: x.price ?? 0,
+      })),
+      resepApotek: toResep('apotek'),
+      resepRujukan: toResep('rujukan'),
+      dokumen: {
+        generalConsent: d.dokumenGeneralConsent === true,
+        asesmenAwal: d.dokumenAsesmenAwal === true,
+        informedConsent: d.dokumenInformedConsent === true,
+        asesmenPraTindakan: d.dokumenAsesmenPraTindakan === true,
+        surgicalSafety: d.dokumenSurgicalSafety === true,
+      },
+      photoCount: typeof d.photoCount === 'number' ? d.photoCount : 0,
+    };
+    emr[d.regId] = doc;
+  }
+  return emr;
+}
+
+/** Tulis ulang seluruh baris anak satu dokumen EMR (hapus lama, buat baru). */
+async function saveEmrChildren(docId: string, faskesId: string, doc: EmrDocument) {
+  const E = STRAPI_ENDPOINTS;
+  await Promise.all([
+    clearChildren(E.emrKondisi, 'emr_document', docId),
+    clearChildren(E.emrOdontogram, 'emr_document', docId),
+    clearChildren(E.emrDiagnosa, 'emr_document', docId),
+    clearChildren(E.emrTindakan, 'emr_document', docId),
+    clearChildren(E.emrAlkes, 'emr_document', docId),
+  ]);
+  // Resep: hapus item tiap resep lama dulu (tanpa cascade), lalu resepnya.
+  const oldReseps = await api<StrapiList>('GET',
+    `${E.emrResep}?pagination[pageSize]=100&filters[emr_document][documentId][$eq]=${docId}`).catch(() => null);
+  for (const r of oldReseps?.data ?? []) {
+    await clearChildren(E.emrResepItem, 'resep', r.documentId);
+    await api('DELETE', `${E.emrResep}/${r.documentId}`).catch(() => null);
+  }
+  // Buat baru — tiap tabel punya endpoint sendiri (tanpa JSON).
+  for (const k of doc.kondisi) {
+    await postRow(E.emrKondisi, {
+      toothNumber: k.toothNumber, deskripsi: k.deskripsi, emr_document: docId, faskes: faskesId,
+    });
+  }
+  for (const [num, t] of Object.entries(doc.odontogram)) {
+    const surf = t.surfaces ?? {};
+    await postRow(E.emrOdontogram, {
+      toothNumber: Number(num),
+      condition: t.condition,
+      surfaceTop: surf.top ?? null,
+      surfaceBottom: surf.bottom ?? null,
+      surfaceLeft: surf.left ?? null,
+      surfaceRight: surf.right ?? null,
+      surfaceCenter: surf.center ?? null,
+      notes: t.notes ?? null,
+      emr_document: docId,
+      faskes: faskesId,
+    });
+  }
+  for (const x of doc.diagnosa) {
+    await postRow(E.emrDiagnosa, {
+      tipe: x.type, icd10Code: x.icd10Code, icd10Desc: x.icd10Desc, emr_document: docId, faskes: faskesId,
+    });
+  }
+  for (const x of doc.tindakan) {
+    await postRow(E.emrTindakan, {
+      code: x.code, name: x.name, tooth: x.tooth, qty: x.qty, price: x.price, discount: x.discount,
+      emr_document: docId, faskes: faskesId,
+    });
+  }
+  for (const x of doc.alkes) {
+    await postRow(E.emrAlkes, {
+      code: x.code, name: x.name, qty: x.qty, price: x.price, emr_document: docId, faskes: faskesId,
+    });
+  }
+  const resepGroups: Array<['apotek' | 'rujukan', ResepApotek[]]> = [
+    ['apotek', doc.resepApotek],
+    ['rujukan', doc.resepRujukan],
+  ];
+  for (const [jenis, list] of resepGroups) {
+    for (let i = 0; i < list.length; i += 1) {
+      const resepId = await postRow(E.emrResep, {
+        jenis, urutan: i, emr_document: docId, faskes: faskesId,
+      });
+      for (const it of list[i].items) {
+        await postRow(E.emrResepItem, {
+          code: it.code, name: it.name, qty: it.qty, price: it.price, resep: resepId, faskes: faskesId,
+        });
+      }
+    }
+  }
+}
+
 interface ClinicState {
   patients: Patient[];
   registrations: Registration[];
@@ -180,7 +530,6 @@ function blankEmr(regId: string): EmrDocument {
     alkes: [],
     resepApotek: [],
     resepRujukan: [],
-    cppt: [],
     dokumen: { generalConsent: false, asesmenAwal: false, informedConsent: false, asesmenPraTindakan: false, surgicalSafety: false },
     photoCount: 0,
   };
@@ -224,30 +573,7 @@ interface ClinicStoreContextValue {
 
 const ClinicStoreContext = createContext<ClinicStoreContextValue | null>(null);
 
-const CACHE_TTL_MS = 2 * 60 * 1000; // 2 menit
-
-interface StoredCache {
-  at: number;
-  state: ClinicState;
-  loaded: Record<string, number>;
-}
-
-function getStoredCache(key: string | null): StoredCache | null {
-  if (!key) return null;
-  const raw = getSessionStorage(`dpi_cache_${key}`);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as StoredCache;
-  } catch {
-    return null;
-  }
-}
-
-function saveStoredCache(key: string | null, state: ClinicState, loaded: Record<string, number>) {
-  if (!key) return;
-  setSessionStorage(`dpi_cache_${key}`, JSON.stringify({ at: Date.now(), state, loaded }));
-}
-
+// Dedup janji fetch yang sedang berjalan (hindari dobel request paralel).
 const inflight = new Map<string, Promise<unknown>>();
 
 async function loadCore(): Promise<Partial<ClinicState>> {
@@ -260,7 +586,8 @@ async function loadCore(): Promise<Partial<ClinicState>> {
     services,
     staff,
     registrations,
-    patients,
+    patientsRaw,
+    patientAllergyRows,
     invoices,
     medicines,
   ] = await Promise.all([
@@ -270,9 +597,16 @@ async function loadCore(): Promise<Partial<ClinicState>> {
     fetchAll<Staff>(E.staff, 'createdAt:ASC').catch(() => []),
     fetchAll<Registration>(E.registrations, 'regDate:DESC').catch(() => []),
     fetchAll<Patient>(E.patients, 'createdAt:DESC').catch(() => []),
+    fetchChildren<AllergyRow>(E.patientAllergies, 'patient').catch(() => []),
     fetchAll<Invoice>(E.invoices, 'createdAt:DESC').catch(() => []),
     fetchAll<Medicine>(E.medicines, 'createdAt:ASC').catch(() => []),
   ]);
+  // Alergi tersimpan sebagai baris tabel patient-allergies → rakit ke string[].
+  const allergiesByPatient = groupKids(patientAllergyRows);
+  const patients: Patient[] = patientsRaw.map((p) => ({
+    ...p,
+    allergies: (allergiesByPatient.get(p.id) ?? []).map((a) => a.alergen),
+  }));
   return {
     rooms,
     patientGroups,
@@ -291,16 +625,39 @@ async function loadModuleData(mod: string): Promise<Partial<ClinicState>> {
   const E = STRAPI_ENDPOINTS;
   switch (mod) {
     case 'farmasi': {
-      const [suppliers, factories, brands, penerimaan, pengeluaran, penyesuaian, retur] =
-        await Promise.all([
-          fetchAll<Supplier>(E.suppliers, 'createdAt:ASC').catch(() => []),
-          fetchAll<Factory>(E.factories, 'createdAt:ASC').catch(() => []),
-          fetchAll<Brand>(E.brands, 'createdAt:ASC').catch(() => []),
-          fetchAll<Penerimaan>(E.penerimaan, 'createdAt:DESC').catch(() => []),
-          fetchAll<Pengeluaran>(E.pengeluaran, 'createdAt:DESC').catch(() => []),
-          fetchAll<Penyesuaian>(E.penyesuaian, 'createdAt:DESC').catch(() => []),
-          fetchAll<Retur>(E.retur, 'createdAt:DESC').catch(() => []),
-        ]);
+      const [suppliers, factories, brands, penerimaanRaw, pengeluaran, penyesuaianRaw, returRaw,
+        penerimaanItemRows, penyesuaianItemRows, returItemRows] = await Promise.all([
+        fetchAll<Supplier>(E.suppliers, 'createdAt:ASC').catch(() => []),
+        fetchAll<Factory>(E.factories, 'createdAt:ASC').catch(() => []),
+        fetchAll<Brand>(E.brands, 'createdAt:ASC').catch(() => []),
+        fetchAll<Penerimaan>(E.penerimaan, 'createdAt:DESC').catch(() => []),
+        fetchAll<Pengeluaran>(E.pengeluaran, 'createdAt:DESC').catch(() => []),
+        fetchAll<Penyesuaian>(E.penyesuaian, 'createdAt:DESC').catch(() => []),
+        fetchAll<Retur>(E.retur, 'createdAt:DESC').catch(() => []),
+        fetchChildren<PenerimaanItemRow>(E.penerimaanItems, 'penerimaan').catch(() => []),
+        fetchChildren<PenyesuaianItemRow>(E.penyesuaianItems, 'penyesuaian').catch(() => []),
+        fetchChildren<ReturItemRow>(E.returItems, 'retur').catch(() => []),
+      ]);
+      const penerimaan: Penerimaan[] = penerimaanRaw.map((p) => ({
+        ...p,
+        items: (groupKids(penerimaanItemRows).get(p.id) ?? []).map((i) => ({
+          id: i.id, code: i.code ?? '', name: i.name ?? '', qty: i.qty ?? 0,
+          price: i.price ?? 0, batch: i.batch ?? '', expiry: i.expiry ?? '',
+        })),
+      }));
+      const penyesuaian: Penyesuaian[] = penyesuaianRaw.map((p) => ({
+        ...p,
+        items: (groupKids(penyesuaianItemRows).get(p.id) ?? []).map((i) => ({
+          id: i.id, code: i.code ?? '', name: i.name ?? '', stockBefore: i.stockBefore ?? 0,
+          stockAfter: i.stockAfter ?? 0, reason: i.reason ?? '',
+        })),
+      }));
+      const retur: Retur[] = returRaw.map((p) => ({
+        ...p,
+        items: (groupKids(returItemRows).get(p.id) ?? []).map((i) => ({
+          id: i.id, code: i.code ?? '', name: i.name ?? '', qty: i.qty ?? 0, reason: i.reason ?? '',
+        })),
+      }));
       return { suppliers, factories, brands, penerimaan, pengeluaran, penyesuaian, retur };
     }
     case 'surat': {
@@ -311,10 +668,17 @@ async function loadModuleData(mod: string): Promise<Partial<ClinicState>> {
       return { letters, referrals };
     }
     case 'billing': {
-      const [apotekInvoices, claims] = await Promise.all([
+      const [apotekRaw, claims, apotekItemRows] = await Promise.all([
         fetchAll<ApotekInvoice>(E.apotekInvoices, 'createdAt:DESC').catch(() => []),
         fetchAll<InsuranceClaim>(E.insuranceClaims, 'createdAt:DESC').catch(() => []),
+        fetchChildren<ApotekItemRow>(E.apotekInvoiceItems, 'apotek_invoice').catch(() => []),
       ]);
+      const apotekInvoices: ApotekInvoice[] = apotekRaw.map((a) => ({
+        ...a,
+        items: (groupKids(apotekItemRows).get(a.id) ?? []).map((i) => ({
+          id: i.id, name: i.name ?? '', qty: i.qty ?? 0, price: i.price ?? 0,
+        })),
+      }));
       return { apotekInvoices, claims };
     }
     case 'pengaturan': {
@@ -326,10 +690,19 @@ async function loadModuleData(mod: string): Promise<Partial<ClinicState>> {
       return { packages, discounts, schedules };
     }
     case 'emr': {
-      const emrDocs = await fetchAll<EmrDocument>(E.emrDocuments, 'createdAt:DESC').catch(() => []);
-      const emr: Record<string, EmrDocument> = {};
-      for (const d of emrDocs) emr[d.regId] = d;
-      return { emr };
+      const E2 = STRAPI_ENDPOINTS;
+      const [emrDocs, kondisi, odonto, diagnosa, tindakan, alkes, reseps, resepItems] =
+        await Promise.all([
+          fetchAll<EmrDocScalars>(E2.emrDocuments, 'createdAt:DESC').catch(() => []),
+          fetchChildren<KondisiRow>(E2.emrKondisi, 'emr_document').catch(() => []),
+          fetchChildren<OdontoRow>(E2.emrOdontogram, 'emr_document').catch(() => []),
+          fetchChildren<DiagnosaRow>(E2.emrDiagnosa, 'emr_document').catch(() => []),
+          fetchChildren<TindakanRow>(E2.emrTindakan, 'emr_document').catch(() => []),
+          fetchChildren<AlkesRow>(E2.emrAlkes, 'emr_document').catch(() => []),
+          fetchChildren<ResepRow>(E2.emrResep, 'emr_document').catch(() => []),
+          fetchChildren<ResepItemRow>(E2.emrResepItem, 'resep').catch(() => []),
+        ]);
+      return { emr: assembleEmr(emrDocs, { kondisi, odonto, diagnosa, tindakan, alkes, reseps, resepItems }) };
     }
     case 'all': {
       const [farmasi, surat, billing, pengaturan, emr] = await Promise.all([
@@ -347,45 +720,18 @@ async function loadModuleData(mod: string): Promise<Partial<ClinicState>> {
 }
 
 export function ClinicStoreProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<ClinicState>(() => {
-    const key = currentFaskesIdSafe();
-    const cached = getStoredCache(key);
-    return cached?.state ?? EMPTY_STATE;
-  });
-
-  const [loadedModules, setLoadedModules] = useState<Record<string, number>>(() => {
-    const key = currentFaskesIdSafe();
-    const cached = getStoredCache(key);
-    return cached?.loaded ?? {};
-  });
-
-  const [loading, setLoading] = useState<boolean>(() => {
-    const key = currentFaskesIdSafe();
-    const cached = getStoredCache(key);
-    if (!cached) return true;
-    return Date.now() - cached.at > CACHE_TTL_MS;
-  });
-
-  const syncCache = useCallback(
-    (newState: ClinicState, newLoaded?: Record<string, number>) => {
-      const key = currentFaskesIdSafe();
-      if (key) {
-        saveStoredCache(key, newState, newLoaded ?? loadedModules);
-      }
-    },
-    [loadedModules],
-  );
+  // State murni di memori — selalu dimuat fresh dari API, tanpa cache storage.
+  const [state, setState] = useState<ClinicState>(EMPTY_STATE);
+  // Modul yang sudah dimuat di sesi memori ini (untuk dimuat ulang saat refresh).
+  const [loadedModules, setLoadedModules] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState<boolean>(true);
 
   const ensureModule = useCallback(
     async (mod: 'farmasi' | 'billing' | 'surat' | 'pengaturan' | 'emr' | 'all') => {
       const key = currentFaskesIdSafe();
       if (!key) return;
 
-      const lastLoaded = loadedModules[mod];
-      if (lastLoaded && Date.now() - lastLoaded < CACHE_TTL_MS) {
-        return; // Cache module masih segar, skip network call
-      }
-
+      // Selalu baca fresh dari API (dedup bila ada request paralel yang sama).
       const inflightKey = `${key}_mod_${mod}`;
       let p = inflight.get(inflightKey) as Promise<Partial<ClinicState>> | undefined;
       if (!p) {
@@ -396,54 +742,33 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       try {
         const modData = await p;
         if (modData && Object.keys(modData).length > 0) {
-          setLoadedModules((prev) => {
-            const nextLoaded = { ...prev, [mod]: Date.now() };
-            setState((prevSt) => {
-              const nextSt = { ...prevSt, ...modData };
-              saveStoredCache(key, nextSt, nextLoaded);
-              return nextSt;
-            });
-            return nextLoaded;
-          });
+          setLoadedModules((prev) => ({ ...prev, [mod]: Date.now() }));
+          setState((prevSt) => ({ ...prevSt, ...modData }));
         }
       } catch (err) {
         console.warn('ensureModule error:', mod, err);
       }
     },
-    [loadedModules],
+    [],
   );
 
-  const fetchCore = useCallback(
-    async (force = false) => {
-      const key = currentFaskesIdSafe();
-      const token = getLocalStorage('jwt');
-      if (!token || !key) return;
+  const fetchCore = useCallback(async () => {
+    const key = currentFaskesIdSafe();
+    const token = getLocalStorage('jwt');
+    if (!token || !key) return;
 
-      if (!force) {
-        const cached = getStoredCache(key);
-        if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-          return; // Cache core masih segar, skip network call
-        }
-      }
+    const inflightKey = `${key}_core`;
+    let p = inflight.get(inflightKey) as Promise<Partial<ClinicState>> | undefined;
+    if (!p) {
+      p = loadCore().finally(() => inflight.delete(inflightKey));
+      inflight.set(inflightKey, p);
+    }
 
-      const inflightKey = `${key}_core`;
-      let p = inflight.get(inflightKey) as Promise<Partial<ClinicState>> | undefined;
-      if (!p) {
-        p = loadCore().finally(() => inflight.delete(inflightKey));
-        inflight.set(inflightKey, p);
-      }
-
-      const coreData = await p;
-      if (coreData) {
-        setState((prev) => {
-          const next = { ...prev, ...coreData };
-          saveStoredCache(key, next, loadedModules);
-          return next;
-        });
-      }
-    },
-    [loadedModules],
-  );
+    const coreData = await p;
+    if (coreData) {
+      setState((prev) => ({ ...prev, ...coreData }));
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -457,15 +782,11 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       const modResults = await Promise.all(modPromises);
       const mergedMods = Object.assign({}, ...modResults);
 
-      setState((prev) => {
-        const next = { ...prev, ...core, ...mergedMods };
-        const now = Date.now();
-        const nextLoaded: Record<string, number> = {};
-        for (const k of loadedKeys) nextLoaded[k] = now;
-        setLoadedModules(nextLoaded);
-        saveStoredCache(key, next, nextLoaded);
-        return next;
-      });
+      setState((prev) => ({ ...prev, ...core, ...mergedMods }));
+      const now = Date.now();
+      const nextLoaded: Record<string, number> = {};
+      for (const k of loadedKeys) nextLoaded[k] = now;
+      setLoadedModules(nextLoaded);
     } catch {
       if (getSession() && !getLocalStorage('jwt')) {
         logout();
@@ -476,32 +797,76 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     }
   }, [loadedModules]);
 
+  // Muat data inti langsung dari API saat provider mount + setiap sesi berubah
+  // (login/logout/ganti faskes). Bersihkan sisa cache era lama bila masih ada.
   useEffect(() => {
-    setLoading(false);
-  }, []);
-
-  // Simpan state terbaru ke sessionStorage setiap kali state berubah
-  useEffect(() => {
-    if (!loading) {
-      const key = currentFaskesIdSafe();
-      if (key) {
-        saveStoredCache(key, state, loadedModules);
+    try {
+      const doomed: string[] = [];
+      for (let i = 0; i < window.sessionStorage.length; i += 1) {
+        const k = window.sessionStorage.key(i);
+        if (k && k.startsWith('dpi_cache_')) doomed.push(k);
       }
+      doomed.forEach((k) => window.sessionStorage.removeItem(k));
+    } catch {
+      /* abaikan */
     }
-  }, [state, loading, loadedModules]);
+
+    let cancelled = false;
+    const boot = async () => {
+      setLoading(true);
+      try {
+        await fetchCore();
+      } catch (err) {
+        console.warn('ClinicStore init error:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void boot();
+
+    const onSession = () => {
+      const key = currentFaskesIdSafe();
+      // Reset memori lalu muat ulang fresh (atau kosongkan saat logout).
+      setState(EMPTY_STATE);
+      setLoadedModules({});
+      if (!key || !getLocalStorage('jwt')) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      fetchCore()
+        .catch((err) => console.warn('ClinicStore reload error:', err))
+        .finally(() => setLoading(false));
+    };
+    window.addEventListener(STRAPI_SESSION_EVENT, onSession);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(STRAPI_SESSION_EVENT, onSession);
+    };
+  }, [fetchCore]);
 
   const addPatient = useCallback<ClinicStoreContextValue['addPatient']>(async (p) => {
+    // Alergi bukan kolom pasien lagi — disimpan sebagai baris patient-allergies.
+    const { allergies, ...rest } = p;
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.patients, {
       data: {
-        ...p,
+        ...rest,
         name: toUpperCase(p.name),
         registeredAt: new Date().toISOString().slice(0, 10),
         faskes: currentFaskesId(),
       },
     });
     const created = toModel<Patient>(res.data);
-    setState((s) => ({ ...s, patients: [created, ...s.patients] }));
-    return created;
+    const patientId = String(res.data.documentId ?? '');
+    for (const alergen of allergies ?? []) {
+      if (!alergen) continue;
+      await postRow(STRAPI_ENDPOINTS.patientAllergies, {
+        alergen, patient: patientId, faskes: currentFaskesId(),
+      }).catch(() => null);
+    }
+    const withAllergies: Patient = { ...created, allergies: allergies ?? [] };
+    setState((s) => ({ ...s, patients: [withAllergies, ...s.patients] }));
+    return withAllergies;
   }, []);
 
   const addRegistration = useCallback<ClinicStoreContextValue['addRegistration']>(async (reg) => {
@@ -513,6 +878,8 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         doctor: toUpperCase(rest.doctor),
         regDate: regDate ?? new Date().toISOString(),
         status: 'Registrasi',
+        // Relasi: registrasi → pasien & faskes (kunci string tetap dipertahankan).
+        patient: rest.patientId,
         faskes: currentFaskesId(),
       },
     });
@@ -528,23 +895,25 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
 
   const updateEmr = useCallback<ClinicStoreContextValue['updateEmr']>(
     async (regId, doc) => {
-      const payload = {
-        ...stripId(doc as EmrDocument & { id?: string }),
-        cppt: doc.cppt.map((c) => ({ ...c, ppa: toUpperCase(c.ppa) })),
-      };
+      const faskesId = currentFaskesId();
       const existing = state.emr[regId] as (EmrDocument & { id?: string }) | undefined;
-      let saved: EmrDocument;
-      if (existing?.id) {
-        const res = await api<{ data: StrapiEntity }>(
-          'PUT', `${STRAPI_ENDPOINTS.emrDocuments}/${existing.id}`, { data: payload },
-        );
-        saved = toModel<EmrDocument>(res.data);
+      // Relasi: rekam medis → registrasi & pasien (kunci string tetap dipertahankan).
+      const patientDocId = state.registrations.find((r) => r.id === regId)?.patientId;
+      const links: Record<string, string> = { registration: regId };
+      if (patientDocId) links.patient = patientDocId;
+      let docId = existing?.id;
+      if (docId) {
+        // Kolom skalar: satu PUT ke baris emr-documents.
+        await api('PUT', `${STRAPI_ENDPOINTS.emrDocuments}/${docId}`, { data: { ...emrScalars(doc), ...links } });
       } else {
         const res = await api<{ data: StrapiEntity }>(
-          'POST', STRAPI_ENDPOINTS.emrDocuments, { data: { ...payload, faskes: currentFaskesId() } },
+          'POST', STRAPI_ENDPOINTS.emrDocuments, { data: { ...emrScalars(doc), ...links, faskes: faskesId } },
         );
-        saved = toModel<EmrDocument>(res.data);
+        docId = res.data.documentId;
       }
+      // Baris anak: tulis ulang per tabel (tanpa JSON).
+      await saveEmrChildren(docId, faskesId, doc);
+      const saved: EmrDocument & { id: string } = { ...doc, id: docId };
       setState((s) => ({
         ...s,
         emr: { ...s.emr, [regId]: saved },
@@ -561,7 +930,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         /* registrasi mungkin sudah berstatus Proses */
       }
     },
-    [state.emr],
+    [state.emr, state.registrations],
   );
 
   const addInvoice = useCallback<ClinicStoreContextValue['addInvoice']>(async (inv) => {
@@ -621,10 +990,22 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   );
 
   const addApotekInvoice = useCallback<ClinicStoreContextValue['addApotekInvoice']>(async (inv) => {
+    // Item tersimpan sebagai baris apotek-invoice-items (tanpa JSON).
+    const { items, ...rest } = inv;
+    const faskesId = currentFaskesId();
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.apotekInvoices, {
-      data: { ...inv, patientName: toUpperCase(inv.patientName), faskes: currentFaskesId() },
+      data: { ...rest, patientName: toUpperCase(inv.patientName), faskes: faskesId },
     });
-    const created = toModel<ApotekInvoice>(res.data);
+    const invoiceId = res.data.documentId;
+    const createdItems: ApotekInvoice['items'] = [];
+    for (const it of items ?? []) {
+      const rowId = await postRow(STRAPI_ENDPOINTS.apotekInvoiceItems, {
+        code: (it as { code?: string }).code ?? null,
+        name: it.name, qty: it.qty, price: it.price, apotek_invoice: invoiceId, faskes: faskesId,
+      });
+      createdItems.push({ id: rowId, name: it.name, qty: it.qty, price: it.price });
+    }
+    const created: ApotekInvoice = { ...toModel<ApotekInvoice>(res.data), items: createdItems };
     setState((s) => ({ ...s, apotekInvoices: [created, ...s.apotekInvoices] }));
     return created;
   }, []);
@@ -696,10 +1077,22 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   );
 
   const addPenyesuaian = useCallback<ClinicStoreContextValue['addPenyesuaian']>(async (adj) => {
+    // Item tersimpan sebagai baris penyesuaian-items (tanpa JSON).
+    const { items, ...rest } = adj;
+    const faskesId = currentFaskesId();
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.penyesuaian, {
-      data: { ...adj, faskes: currentFaskesId() },
+      data: { ...rest, faskes: faskesId },
     });
-    const created = toModel<Penyesuaian>(res.data);
+    const adjId = res.data.documentId;
+    const createdItems: Penyesuaian['items'] = [];
+    for (const it of items ?? []) {
+      const rowId = await postRow(STRAPI_ENDPOINTS.penyesuaianItems, {
+        code: it.code, name: it.name, stockBefore: it.stockBefore, stockAfter: it.stockAfter,
+        reason: it.reason, penyesuaian: adjId, faskes: faskesId,
+      });
+      createdItems.push({ ...it, id: rowId });
+    }
+    const created: Penyesuaian = { ...toModel<Penyesuaian>(res.data), items: createdItems };
     setState((s) => ({ ...s, penyesuaian: [created, ...s.penyesuaian] }));
     return created;
   }, []);
