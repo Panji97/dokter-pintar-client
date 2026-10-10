@@ -148,8 +148,8 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
   const selectedDate = dateFilter || todayStr;
   const isTodaySelected = !!todayStr && selectedDate === todayStr;
 
-  // Registrasi pada tanggal terpilih — fallback: pendaftaran terakhir bila
-  // hari ini yang dipilih sedang kosong.
+  // Registrasi pada tanggal terpilih — default hari ini, tanpa fallback
+  // ke tanggal lain agar yang tampil selalu data hari yang dipilih.
   const sortedRegs = useMemo(
     () => [...registrations].sort((a, b) => b.regDate.localeCompare(a.regDate)),
     [registrations]
@@ -158,12 +158,11 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
     () => (selectedDate ? sortedRegs.filter((r) => toLocalDateStr(r.regDate) === selectedDate) : []),
     [sortedRegs, selectedDate]
   );
-  const baseRegs = dateRegs.length > 0 || !isTodaySelected ? dateRegs : sortedRegs.slice(0, 10);
+  const baseRegs = dateRegs;
   const shownRegs =
     poliFilter === 'Semua'
       ? baseRegs
       : baseRegs.filter((r) => r.room === poliFilter);
-  const isFallbackView = isTodaySelected && dateRegs.length === 0 && baseRegs.length > 0;
   const waitingCount = shownRegs.filter((r) => r.status === 'Registrasi').length;
   const emrCount = shownRegs.filter((r) => r.status === 'Proses').length;
   const finishedCount = shownRegs.filter((r) => r.status === 'Selesai').length;
@@ -210,11 +209,9 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
             <div className="min-w-0">
               <h2 className="font-bold text-slate-800 text-sm">Status Pendaftaran Pasien</h2>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {isFallbackView
-                  ? 'Pendaftaran terakhir'
-                  : isTodaySelected
-                    ? 'Registrasi hari ini'
-                    : `Antrean ${fmtDate(selectedDate)}`}
+                {isTodaySelected
+                  ? 'Registrasi hari ini'
+                  : `Antrean ${fmtDate(selectedDate)}`}
               </p>
             </div>
             <span className="text-[10px] font-bold bg-teal-600 text-white rounded-full px-2 py-1 shrink-0">
@@ -300,7 +297,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-800 truncate">{r.patientName}</div>
                   <div className="text-[11px] text-slate-400 truncate">
-                    {isTodaySelected && !isFallbackView ? `${r.room} · ${r.doctor}` : `${fmtDate(r.regDate)} · ${r.room} · ${r.doctor}`}
+                    {isTodaySelected ? `${r.room} · ${r.doctor}` : `${fmtDate(r.regDate)} · ${r.room} · ${r.doctor}`}
                   </div>
                 </div>
                 <span

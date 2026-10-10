@@ -127,6 +127,14 @@ export interface DiagnosaItem {
   icd10Desc: string;
 }
 
+/** Master ICD dari API `GET /api/ms-icds` (pengganti daftar hardcode). */
+export interface IcdItem {
+  id: string;
+  code: string;
+  desc: string;
+  category: 'ICD-10' | 'ICD-9';
+}
+
 export interface TindakanItem {
   id: string;
   code: string; // kode pelayanan e.g. PK0053

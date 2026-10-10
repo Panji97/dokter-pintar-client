@@ -44,6 +44,8 @@ export const STRAPI_ENDPOINTS = {
   serviceDiscounts: '/api/service-discounts',
   staff: '/api/staffs',
   staffSchedules: '/api/staff-schedules',
+  // master ICD (global, tanpa faskes) — pengganti lib/icd.ts hardcode
+  icd: '/api/ms-icds',
   // bawaan users-permissions
   authLocal: '/api/auth/local',
   usersMe: '/api/users/me',

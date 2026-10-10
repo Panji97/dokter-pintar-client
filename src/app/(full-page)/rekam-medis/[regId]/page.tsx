@@ -9,7 +9,7 @@ import { useShell } from '@/components/layout/AppShell';
 import { Odontogram } from '@/components/rme/Odontogram';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
-import { ICD10_LIST } from '@/lib/icd';
+import { useIcdList, filterIcd } from '@/lib/useIcd';
 import {
   VITAL_RULES, vitalRuleOf, sanitizeNumeric, sanitizeInt,
   vitalError, tensiPairError, toothError, gravidaError, qtyError,
@@ -85,6 +85,11 @@ export default function EmrDetailPage() {
   const [newDiag, setNewDiag] = useState<DiagnosaItem>({ id: '', type: 'Diagnosa dokter', icd10Code: '', icd10Desc: '' });
   const [newTindakan, setNewTindakan] = useState<TindakanItem>({ id: '', code: 'PK0053', name: 'JPKM', tooth: '-', qty: 1, price: 350000, discount: 0 });
   const [newAlkes, setNewAlkes] = useState<AlkesItem>({ id: '', code: 'BHP5', name: 'ALKES 5', qty: 1, price: 95000 });
+
+  // Master ICD-10 dari API (bukan hardcode) — dipakai di tab Asesmen.
+  const { items: icdList, isLoading: icdLoading, error: icdError } = useIcdList('ICD-10');
+  const [icdKeyword, setIcdKeyword] = useState('');
+  const filteredIcd = useMemo(() => filterIcd(icdList, icdKeyword), [icdList, icdKeyword]);
 
   const totals = useMemo(() => {
     const tindakan = draft.tindakan.reduce((s, t) => s + t.qty * t.price - t.discount, 0);
@@ -798,18 +803,37 @@ export default function EmrDetailPage() {
                 </table></div>
                 <div className="flex flex-wrap gap-2 items-end border-t border-slate-100 pt-4">
                   <div className="flex-1 min-w-56">
-                    <label className={labelCls}>ICD-10</label>
+                    <label className={labelCls}>ICD-10 (dari API)</label>
+                    <input
+                      value={icdKeyword}
+                      onChange={(e) => setIcdKeyword(e.target.value)}
+                      placeholder="Cari kode / deskripsi…"
+                      className={`${inputCls} mb-2`}
+                    />
                     <select
                       value={newDiag.icd10Code}
                       onChange={(e) => {
-                        const found = ICD10_LIST.find((c) => c.code === e.target.value);
+                        const found = icdList.find((c) => c.code === e.target.value);
                         setNewDiag({ ...newDiag, icd10Code: e.target.value, icd10Desc: found?.desc ?? '' });
                       }}
                       className={inputCls}
+                      disabled={icdLoading || !!icdError}
                     >
-                      <option value="">— Pilih kode ICD-10 —</option>
-                      {ICD10_LIST.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.desc}</option>)}
+                      <option value="">
+                        {icdLoading ? '— Memuat ICD dari API… —' : icdError ? '— Gagal memuat ICD —' : '— Pilih kode ICD-10 —'}
+                      </option>
+                      {filteredIcd.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.desc}</option>)}
                     </select>
+                    {icdError && (
+                      <p className="text-[11px] text-rose-600 mt-1 leading-tight">
+                        Gagal memuat master ICD dari API. Periksa koneksi / permission role Strapi untuk GET /api/ms-icds.
+                      </p>
+                    )}
+                    {!icdLoading && !icdError && filteredIcd.length === 0 && (
+                      <p className="text-[11px] text-slate-400 mt-1 leading-tight">
+                        {icdList.length === 0 ? 'Master ICD di API masih kosong.' : 'Tidak ada kode yang cocok dengan pencarian.'}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={() => {
