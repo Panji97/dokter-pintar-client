@@ -9,7 +9,7 @@ import { useShell } from '@/components/layout/AppShell';
 import { Odontogram } from '@/components/rme/Odontogram';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
-import { ICD10_LIST, ICD9_LIST } from '@/lib/icd';
+import { ICD10_LIST } from '@/lib/icd';
 import {
   VITAL_RULES, vitalRuleOf, sanitizeNumeric, sanitizeInt,
   vitalError, tensiPairError, toothError, gravidaError, qtyError,
@@ -45,7 +45,6 @@ export default function EmrDetailPage() {
   }, [ensureModule]);
 
   const reg = state.registrations.find((r) => r.id === regId);
-  const patient = state.patients.find((p) => p.id === reg?.patientId);
   const doc = getOrCreateEmr(regId);
   // Entri tersimpan (stabil referensinya) — undefined selama modul EMR memuat.
   const storedDoc = reg ? state.emr[regId] : undefined;
