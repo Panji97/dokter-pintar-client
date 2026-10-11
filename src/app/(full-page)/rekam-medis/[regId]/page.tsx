@@ -231,7 +231,7 @@ export default function EmrDetailPage() {
         <main className="flex-1 p-4 md:p-6">
           <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-sm text-slate-400">
             {loading ? 'Memuat data…' : (
-              <>Registrasi tidak ditemukan.{' '}
+              <>Pendaftaran tidak ditemukan.{' '}
               <Link href="/rekam-medis" className="text-teal-600 font-medium">Kembali ke daftar</Link></>
             )}
           </div>
@@ -270,7 +270,7 @@ export default function EmrDetailPage() {
               ['Grup Pasien', reg.group],
               ['Poli', reg.room],
               ['Pelayanan', reg.serviceType],
-              ['Tgl. Registrasi', regDate.date],
+              ['Tgl. Pendaftaran', regDate.date],
               ['Dokter', reg.doctor],
             ].map(([label, value]) => (
               <div key={label} className="min-w-0">

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import { useFetch, usePost } from '@/lib/strapi';
+import { useOptionGroup } from '@/lib/useOptions';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { getSession } from '@/lib/auth';
 
@@ -14,22 +15,20 @@ interface StaffUser {
 }
 
 const ADMIN_ROLES = ['Administrator', 'Admin Faskes'];
-const STAFF_ROLES = ['Dokter Gigi', 'Dokter Umum', 'Perawat', 'Apoteker', 'Kasir', 'Admin Faskes', 'Pengguna'];
 
-/**
- * Kelola akun login staf dalam satu faskes (undang + daftar).
- * Hanya admin faskes. Pola endpoint custom meniru HRIS approver/register.
- */
 export function StaffAccounts() {
   const session = typeof window !== 'undefined' ? getSession() : null;
   const isAdmin = ADMIN_ROLES.includes(session?.role ?? '');
 
   const { data, mutate, isLoading } = useFetch(STRAPI_ENDPOINTS.faskesStaff);
   const { postData: invite, loading: inviting } = usePost(STRAPI_ENDPOINTS.faskesStaff);
+  // Peran akun — wajib dari API (ms-options), tidak boleh hardcode.
+  const { items: appRoles, isLoading: loadingRoles } = useOptionGroup('app-role');
 
-  const [form, setForm] = useState({ name: '', email: '', password: '', appRole: 'Dokter Gigi' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', appRole: '' });
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
+  const appRoleValue = form.appRole || appRoles[0]?.value || '';
 
   const users = ((data as { data?: StaffUser[] } | undefined)?.data ?? []) as StaffUser[];
 
@@ -37,15 +36,19 @@ export function StaffAccounts() {
     e.preventDefault();
     setError('');
     setOk('');
+    if (!appRoleValue) {
+      setError('Peran wajib dipilih (menunggu master peran dari API).');
+      return;
+    }
     const result = await invite({
-      data: { name: form.name.trim(), email: form.email.trim(), password: form.password, appRole: form.appRole },
+      data: { name: form.name.trim(), email: form.email.trim(), password: form.password, appRole: appRoleValue },
     });
     if (result?.error) {
       setError(result.error.message ?? 'Gagal mengundang staf.');
       return;
     }
     setOk(`Akun ${form.email.trim()} dibuat — staf bisa masuk dengan email & kata sandi itu.`);
-    setForm({ name: '', email: '', password: '', appRole: 'Dokter Gigi' });
+    setForm({ name: '', email: '', password: '', appRole: appRoles[0]?.value ?? '' });
     mutate();
   };
 
@@ -91,9 +94,17 @@ export function StaffAccounts() {
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 block mb-1">Peran</label>
-              <select value={form.appRole} onChange={(e) => setForm({ ...form, appRole: e.target.value })} className={inputCls}>
-                {STAFF_ROLES.map((r) => (
-                  <option key={r}>{r}</option>
+              <select
+                value={appRoleValue}
+                onChange={(e) => setForm({ ...form, appRole: e.target.value })}
+                disabled={loadingRoles && appRoles.length === 0}
+                className={inputCls}
+              >
+                <option value="">
+                  {loadingRoles && appRoles.length === 0 ? 'Memuat...' : '— Pilih peran —'}
+                </option>
+                {appRoles.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>
             </div>

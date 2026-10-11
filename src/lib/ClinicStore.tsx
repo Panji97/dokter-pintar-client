@@ -563,7 +563,7 @@ interface ClinicStoreContextValue {
   refresh: () => Promise<void>;
   /** Muat modul data tambahan secara on-demand (lazy load). */
   ensureModule: (mod: 'farmasi' | 'billing' | 'surat' | 'pengaturan' | 'emr' | 'all') => Promise<void>;
-  /** Tambah registrasi baru (Pasien Baru atau Pasien Lama) */
+  /** Tambah pendaftaran baru (Pasien Baru atau Pasien Lama) */
   addRegistration: (reg: Omit<Registration, 'id' | 'status' | 'regDate'> & { regDate?: string }) => Promise<Registration>;
   addPatient: (p: Omit<Patient, 'id' | 'registeredAt'>) => Promise<Patient>;
   getOrCreateEmr: (regId: string) => EmrDocument;
@@ -904,8 +904,8 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         patientName: toUpperCase(rest.patientName),
         doctor: toUpperCase(rest.doctor),
         regDate: regDate ?? new Date().toISOString(),
-        status: 'Registrasi',
-        // Relasi: registrasi → pasien & faskes (kunci string tetap dipertahankan).
+        status: 'Pendaftaran',
+        // Relasi: pendaftaran → pasien & faskes (kunci string tetap dipertahankan).
         patient: rest.patientId,
         faskes: currentFaskesId(),
       },
@@ -924,7 +924,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     async (regId, doc) => {
       const faskesId = currentFaskesId();
       const existing = state.emr[regId] as (EmrDocument & { id?: string }) | undefined;
-      // Relasi: rekam medis → registrasi & pasien (kunci string tetap dipertahankan).
+      // Relasi: rekam medis → pendaftaran & pasien (kunci string tetap dipertahankan).
       const patientDocId = state.registrations.find((r) => r.id === regId)?.patientId;
       const links: Record<string, string> = { registration: regId };
       if (patientDocId) links.patient = patientDocId;
@@ -948,25 +948,25 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
           r.id === regId ? { ...r, status: 'Proses' } : r,
         ),
       }));
-      // Tandai registrasi sebagai Proses di server (best-effort).
+      // Tandai pendaftaran sebagai Proses di server (best-effort).
       try {
         await api('PUT', `${STRAPI_ENDPOINTS.registrations}/${regId}`, {
           data: { status: 'Proses' },
         });
       } catch {
-        /* registrasi mungkin sudah berstatus Proses */
+        /* pendaftaran mungkin sudah berstatus Proses */
       }
     },
     [state.emr, state.registrations],
   );
 
   const addInvoice = useCallback<ClinicStoreContextValue['addInvoice']>(async (inv) => {
-    // Idempoten per kunjungan: 1 registrasi = 1 tagihan. Tanpa ini, klik
+    // Idempoten per kunjungan: 1 pendaftaran = 1 tagihan. Tanpa ini, klik
     // tombol "Selesai" 2x pada rekam medis yang sama membuat invoice ganda.
     if (inv.visitId) {
       const existing = state.invoices.find((i) => i.visitId === inv.visitId);
       if (existing) {
-        // Tagihan yang sudah Lunas jangan pernah diubah — billing sudah tutup.
+        // Tagihan yang sudah Lunas jangan pernah diubah — penagihan sudah tutup.
         if (existing.paymentStatus === 'Lunas') return existing;
         // Masih Belum Dibayar → perbarui dengan nominal terbaru
         // (EMR sempat diedit setelah klik Selesai pertama).
@@ -980,7 +980,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
             medicineFee: inv.medicineFee,
             discount: inv.discount,
             total: inv.total,
-            // Relasi: tagihan → pasien & registrasi (kunci string tetap dipertahankan).
+            // Relasi: tagihan → pasien & pendaftaran (kunci string tetap dipertahankan).
             patient: inv.patientId,
             registration: inv.visitId,
           },
@@ -1006,7 +1006,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         patientName: toUpperCase(inv.patientName),
         doctor: toUpperCase(inv.doctor),
         faskes: currentFaskesId(),
-        // Relasi: tagihan → pasien & registrasi (kunci string tetap dipertahankan).
+        // Relasi: tagihan → pasien & pendaftaran (kunci string tetap dipertahankan).
         patient: inv.patientId,
         registration: inv.visitId,
       },
@@ -1030,7 +1030,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         },
       });
 
-      // Update registrasi kunjungan terkait menjadi status Selesai
+      // Update pendaftaran kunjungan terkait menjadi status Selesai
       if (inv?.visitId) {
         try {
           await api('PUT', `${STRAPI_ENDPOINTS.registrations}/${inv.visitId}`, {

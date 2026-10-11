@@ -21,7 +21,7 @@ export interface ToothState {
 export type OdontogramMap = Record<number, ToothState>;
 
 /**
- * CATATAN: Entitas tidak lagi membawa nomor custom (No. RM, No. Registrasi, dll).
+ * CATATAN: Entitas tidak lagi membawa nomor custom (No. RM, No. Pendaftaran, dll).
  * ID/numbering dokumen akan diberikan oleh backend (Strapi 5) sebagai default.
  */
 export interface Patient {
@@ -49,8 +49,10 @@ export interface Registration {
   serviceType: string; // e.g. "Pelayanan Dokter Gigi Umum"
   room: string;
   doctor: string;
-  /** 'Registrasi' = belum ada rekam medis, 'Proses' = sudah ada EMR, 'Selesai' = sudah bayar */
-  status: 'Registrasi' | 'Proses' | 'Selesai';
+  /** Jadwal dokter terpilih ("Hari|jamMulai|jamSelesai", opsional). */
+  jadwal?: string;
+  /** 'Pendaftaran' = belum ada rekam medis, 'Proses' = sudah ada EMR, 'Selesai' = sudah bayar */
+  status: 'Pendaftaran' | 'Proses' | 'Selesai';
 }
 
 /* ============ BOOKING ============ */
@@ -133,6 +135,15 @@ export interface IcdItem {
   code: string;
   desc: string;
   category: 'ICD-10' | 'ICD-9';
+}
+
+/** Opsi dropdown generik dari API `GET /api/ms-options` (group/value/label). */
+export interface OptionItem {
+  id: string;
+  group: string;
+  value: string;
+  label: string;
+  urutan: number;
 }
 
 export interface TindakanItem {

@@ -4,7 +4,9 @@ import { useMemo, useState, useEffect } from 'react';
 import { useSWRConfig } from 'swr';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
+import { useOptionGroup } from '@/lib/useOptions';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
+import type { Invoice } from '@/types/clinic';
 import {
   Search, Receipt, Pill, ShieldCheck, Plus, Printer, Banknote, QrCode, CreditCard, Wallet,
   ChevronLeft, ChevronRight,
@@ -12,16 +14,17 @@ import {
 
 type Tab = 'pasien' | 'apotek' | 'klaim';
 
-/** Ukuran halaman daftar billing (berlaku untuk ketiga tab). */
+/** Ukuran halaman daftar tagihan (berlaku untuk ketiga tab). */
 const PAGE_SIZE = 10;
 
-const PAYMENT_METHODS = [
-  { label: 'Tunai', icon: Banknote },
-  { label: 'QRIS', icon: QrCode },
-  { label: 'Debit', icon: CreditCard },
-  { label: 'Transfer', icon: Wallet },
-  { label: 'BPJS', icon: Receipt },
-] as const;
+/** Ikon per metode pembayaran (presentasi lokal; daftar metodenya dari API). */
+const PAYMENT_ICONS: Record<string, typeof Banknote> = {
+  Tunai: Banknote,
+  QRIS: QrCode,
+  Debit: CreditCard,
+  Transfer: Wallet,
+  BPJS: Receipt,
+};
 
 /** Nomor halaman dengan elipsis (1 … 4 5 6 … 12) agar tetap ringkas bila data banyak. */
 function pageNumbers(page: number, totalPages: number): (number | '…')[] {
@@ -42,7 +45,7 @@ function pageNumbers(page: number, totalPages: number): (number | '…')[] {
  * nomor halaman yang bisa dilompat langsung, dan label bahasa sehari-hari.
  * Tampil hanya bila lebih dari 1 halaman.
  */
-function BillingPager({ safePage, totalPages, total, unit, onPage }: {
+function TagihanPager({ safePage, totalPages, total, unit, onPage }: {
   safePage: number;
   totalPages: number;
   total: number;
@@ -104,7 +107,7 @@ function BillingPager({ safePage, totalPages, total, unit, onPage }: {
   );
 }
 
-export default function BillingPage() {
+export default function TagihanPage() {
   const { state, payInvoice, addApotekInvoice, ensureModule } = useClinicStore();
   const { mutate: mutateGlobal } = useSWRConfig();
   const [tab, setTab] = useState<Tab>('pasien');
@@ -114,12 +117,15 @@ export default function BillingPage() {
   }, [ensureModule]);
   const [search, setSearch] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
-  const [method, setMethod] = useState<NonNullable<typeof state.invoices[number]['paymentMethod']>>('Tunai');
+  // Metode pembayaran — wajib dari API (ms-options), tidak boleh hardcode.
+  const { items: paymentMethods, isLoading: loadingMethods } = useOptionGroup('payment-method');
+  const [method, setMethod] = useState('');
+  const activeMethod = method || paymentMethods[0]?.value || '';
   const [discount, setDiscount] = useState(0);
 
   // form obat bebas
   const [showObat, setShowObat] = useState(false);
-  const [obatForm, setObatForm] = useState({ patientName: '', type: 'Obat Bebas' as 'Obat Bebas' | 'Obat Resep', items: [{ id: 'med-paracetamol', name: 'Paracetamol 2', qty: 1, price: 7200 }] });
+  const [obatForm, setObatForm] = useState({ patientName: '', type: 'Obat Bebas' as 'Obat Bebas' | 'Obat Resep', items: [] as { id: string; name: string; qty: number; price: number }[] });
 
   const payingInv = state.invoices.find((i) => i.id === paying) ?? null;
 
@@ -157,7 +163,7 @@ export default function BillingPage() {
 
   return (
     <>
-      <Topbar title="Billing" subtitle="Tagihan pasien, tagihan apotek, dan klaim asuransi" />
+      <Topbar title="Tagihan" subtitle="Tagihan pasien, tagihan apotek, dan klaim asuransi" />
       <main className="flex-1 p-4 md:p-6 space-y-5">
         {/* Ringkasan */}
         {/* Mobile: 3 ubin mini sejajar */}
@@ -346,7 +352,7 @@ export default function BillingPage() {
                 )}
               </tbody>
             </table></div>
-            <BillingPager safePage={pagedInvoices.safePage} totalPages={pagedInvoices.totalPages} total={pagedInvoices.total} unit="tagihan" onPage={setPage} />
+            <TagihanPager safePage={pagedInvoices.safePage} totalPages={pagedInvoices.totalPages} total={pagedInvoices.total} unit="tagihan" onPage={setPage} />
           </div>
         )}
 
@@ -424,7 +430,7 @@ export default function BillingPage() {
                 )}
               </tbody>
             </table></div>
-            <BillingPager safePage={pagedApotek.safePage} totalPages={pagedApotek.totalPages} total={pagedApotek.total} unit="tagihan apotek" onPage={setPage} />
+            <TagihanPager safePage={pagedApotek.safePage} totalPages={pagedApotek.totalPages} total={pagedApotek.total} unit="tagihan apotek" onPage={setPage} />
           </div>
         )}
 
@@ -501,7 +507,7 @@ export default function BillingPage() {
                 )}
               </tbody>
             </table></div>
-            <BillingPager safePage={pagedKlaim.safePage} totalPages={pagedKlaim.totalPages} total={pagedKlaim.total} unit="klaim" onPage={setPage} />
+            <TagihanPager safePage={pagedKlaim.safePage} totalPages={pagedKlaim.totalPages} total={pagedKlaim.total} unit="klaim" onPage={setPage} />
           </div>
         )}
       </main>
@@ -536,18 +542,24 @@ export default function BillingPage() {
               <div>
                 <label className={`${labelCls}`}>Metode Pembayaran</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {PAYMENT_METHODS.map(({ label, icon: Icon }) => (
-                    <button
-                      key={label}
-                      onClick={() => setMethod(label)}
-                      className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-xs font-medium transition ${
-                        method === label ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-200' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {label}
-                    </button>
-                  ))}
+                  {loadingMethods && paymentMethods.length === 0 && (
+                    <p className="text-xs text-slate-400 col-span-full">Memuat metode pembayaran...</p>
+                  )}
+                  {paymentMethods.map((m) => {
+                    const Icon = PAYMENT_ICONS[m.value] ?? Wallet;
+                    return (
+                      <button
+                        key={m.value}
+                        onClick={() => setMethod(m.value)}
+                        className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg border text-xs font-medium transition ${
+                          activeMethod === m.value ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-200' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {m.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -555,7 +567,8 @@ export default function BillingPage() {
               <button onClick={() => setPaying(null)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">Batal</button>
               <button
                 onClick={async () => {
-                  await payInvoice(payingInv.id, method, discount);
+                  if (!activeMethod) return;
+                  await payInvoice(payingInv.id, activeMethod as NonNullable<Invoice['paymentMethod']>, discount);
                   mutateGlobal((key) => typeof key === 'string' && (key.includes(STRAPI_ENDPOINTS.invoices) || key.includes(STRAPI_ENDPOINTS.registrations)));
                   setPaying(null);
                 }}

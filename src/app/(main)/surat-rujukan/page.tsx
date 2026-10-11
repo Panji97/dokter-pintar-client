@@ -3,23 +3,17 @@
 import { useEffect, useState } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { useClinicStore, fmtDate } from "@/lib/ClinicStore";
+import { useOptionGroup } from "@/lib/useOptions";
 import { FileText, FileOutput } from "lucide-react";
-
-const LETTER_KINDS = [
-  "Surat Sakit",
-  "Surat Sehat",
-  "Surat Keterangan",
-  "Surat Kontrol",
-  "Surat Kematian",
-] as const;
-const REFERRAL_KINDS = [
-  "Rujukan Internal",
-  "Rujukan ke Fasilitas Lain",
-] as const;
 
 export default function SuratRujukanPage() {
   const { state, addLetter, addReferral, ensureModule } = useClinicStore();
   const [tab, setTab] = useState<"surat" | "rujukan">("surat");
+  // Jenis surat/rujukan — wajib dari API (ms-options), tidak boleh hardcode.
+  const { items: letterKinds, isLoading: loadingLetterKinds } = useOptionGroup("letter-kind");
+  const { items: referralKinds, isLoading: loadingReferralKinds } = useOptionGroup("referral-kind");
+  const kinds = tab === "surat" ? letterKinds : referralKinds;
+  const loadingKinds = tab === "surat" ? loadingLetterKinds : loadingReferralKinds;
   const [kind, setKind] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
 
@@ -109,13 +103,16 @@ export default function SuratRujukanPage() {
               value={kind}
               onChange={(e) => e.target.value && openForm(e.target.value)}
               className={inputCls}
+              disabled={loadingKinds && kinds.length === 0}
             >
               <option value="">
-                Pilih Jenis {tab === "surat" ? "Surat" : "Rujukan"}
+                {loadingKinds && kinds.length === 0
+                  ? "Memuat..."
+                  : `Pilih Jenis ${tab === "surat" ? "Surat" : "Rujukan"}`}
               </option>
-              {(tab === "surat" ? LETTER_KINDS : REFERRAL_KINDS).map((k) => (
-                <option key={k} value={k}>
-                  {k}
+              {kinds.map((k) => (
+                <option key={k.value} value={k.value}>
+                  {k.label}
                 </option>
               ))}
             </select>

@@ -86,8 +86,8 @@ const supportFeatures = [
   },
   {
     icon: Monitor,
-    title: 'Dashboard Antrean',
-    desc: 'Display antrean pasien real-time untuk ruang tunggu — pasien tahu gilirannya.',
+    title: 'Layar Antrean',
+    desc: 'Tampilan antrean pasien real-time untuk ruang tunggu — pasien tahu gilirannya.',
   },
 ];
 
@@ -103,7 +103,7 @@ const tiers: Tier[] = [
     name: 'Starter',
     icon: 'bg-gradient-to-r from-teal-200 to-teal-300',
     badge: null,
-    check: (f) => ['Rekam Medis', 'Laporan Rekam Medis, Pendapatan dan SKP', 'Surat Sakit, Surat Sehat dan Rujukan', 'Billing (Tagihan Pasien)'].includes(f),
+    check: (f) => ['Rekam Medis', 'Laporan Rekam Medis, Pendapatan dan SKP', 'Surat Sakit, Surat Sehat dan Rujukan', 'Tagihan Pasien'].includes(f),
   },
   {
     name: 'Growth',
@@ -111,7 +111,7 @@ const tiers: Tier[] = [
     badge: 'Best offer',
     check: (f) => [
       'Rekam Medis', 'Laporan Rekam Medis, Pendapatan dan SKP', 'Surat Sakit, Surat Sehat dan Rujukan',
-      'Billing (Tagihan Pasien)', 'Riwayat CPPT', 'Dashboard', 'Booking Online & Notifikasi', 'Registrasi Cepat (Scan)',
+      'Tagihan Pasien', 'Riwayat CPPT', 'Beranda', 'Pemesanan Online & Notifikasi', 'Pendaftaran Cepat (Pindai)',
       'Farmasi',
     ].includes(f),
   },
@@ -127,11 +127,11 @@ const tierFeatureList = [
   'Rekam Medis',
   'Laporan Rekam Medis, Pendapatan dan SKP',
   'Surat Sakit, Surat Sehat dan Rujukan',
-  'Billing (Tagihan Pasien)',
+  'Tagihan Pasien',
   'Riwayat CPPT',
-  'Dashboard',
-  'Booking Online & Notifikasi',
-  'Registrasi Cepat (Scan)',
+  'Beranda',
+  'Pemesanan Online & Notifikasi',
+  'Pendaftaran Cepat (Pindai)',
   'Farmasi',
   'Odontogram Interaktif',
   'Kajian Resep',
@@ -510,12 +510,12 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Registrasi / Scan */}
+            {/* Pendaftaran / Pindai */}
             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-col shadow-sm">
               <div className="w-12 h-12 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/30">
                 <ScanLine className="w-5 h-5" />
               </div>
-              <h3 className="mt-4 text-base font-black text-slate-900 dark:text-white">Registrasi Cepat</h3>
+              <h3 className="mt-4 text-base font-black text-slate-900 dark:text-white">Pendaftaran Cepat</h3>
               <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed flex-1">
                 Pendaftaran pasien baru/lama dengan data identitas yang terisi otomatis — cepat dan akurat.
               </p>
@@ -593,14 +593,14 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Billing */}
+            {/* Tagihan */}
             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-col shadow-sm">
               <div className="w-12 h-12 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/30">
                 <ReceiptText className="w-5 h-5" />
               </div>
-              <h3 className="mt-4 text-base font-black text-slate-900 dark:text-white">Billing &amp; Kasir</h3>
+              <h3 className="mt-4 text-base font-black text-slate-900 dark:text-white">Tagihan &amp; Kasir</h3>
               <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed flex-1">
-                Invoice otomatis dari tindakan &amp; resep, pembayaran multi-metode, hingga klaim penjaminan.
+                Tagihan otomatis dari tindakan &amp; resep, pembayaran multi-metode, hingga klaim penjaminan.
               </p>
               <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4">
                 <div className="space-y-1.5">

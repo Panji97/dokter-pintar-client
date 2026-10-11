@@ -105,7 +105,7 @@ export function ShellProvider({
       return !v;
     });
   }, []);
-  /** Pastikan panel antrean desktop terbuka (dipakai setelah registrasi). */
+  /** Pastikan panel antrean desktop terbuka (dipakai setelah pendaftaran). */
   const setQueueOpenValue = useCallback((open: boolean) => {
     try {
       localStorage.setItem('dokter-pintar-queue', open ? 'open' : 'closed');

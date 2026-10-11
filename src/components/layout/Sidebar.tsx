@@ -23,10 +23,10 @@ import { LogoLink } from "./LogoLink";
 import { getSession, logout, type Session } from "@/lib/auth";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Registrasi", href: "/registrasi", icon: ClipboardPlus },
+  { label: "Beranda", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Pendaftaran", href: "/registrasi", icon: ClipboardPlus },
   { label: "Rekam Medis", href: "/rekam-medis", icon: FileHeart },
-  { label: "Billing", href: "/billing", icon: ReceiptText },
+  { label: "Tagihan", href: "/billing", icon: ReceiptText },
   { label: "Surat & Rujukan", href: "/surat-rujukan", icon: FileOutput },
   { label: "Farmasi", href: "/farmasi", icon: Pill },
   { label: "Laporan", href: "/laporan", icon: BarChart3 },
@@ -47,8 +47,8 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
 
-  // Jumlah tagihan belum dibayar — badge merah di menu Billing.
-  // Definisi sama seperti halaman Billing ("invoice tertunda") & notifikasi Topbar.
+  // Jumlah tagihan belum dibayar — badge merah di menu Tagihan.
+  // Definisi sama seperti halaman Tagihan ("tagihan tertunda") & notifikasi Topbar.
   const { state } = useClinicStore();
   const unpaidCount = useMemo(
     () => state.invoices.filter((i) => i.paymentStatus === "Belum Dibayar").length,

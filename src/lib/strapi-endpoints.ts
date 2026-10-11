@@ -46,6 +46,9 @@ export const STRAPI_ENDPOINTS = {
   staffSchedules: '/api/staff-schedules',
   // master ICD (global, tanpa faskes) — pengganti lib/icd.ts hardcode
   icd: '/api/ms-icds',
+  // master opsi dropdown generik (group/value/label/urutan) — semua opsi
+  // dropdown wajib dari API, tidak boleh hardcode
+  options: '/api/ms-options',
   // bawaan users-permissions
   authLocal: '/api/auth/local',
   usersMe: '/api/users/me',

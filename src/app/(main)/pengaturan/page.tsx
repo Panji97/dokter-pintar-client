@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore } from '@/lib/ClinicStore';
+import { useOptionGroup } from '@/lib/useOptions';
 import { FaskesInfo } from '@/components/pengaturan/FaskesInfo';
 import { StaffAccounts } from '@/components/pengaturan/StaffAccounts';
 import {
@@ -22,7 +23,10 @@ export default function PengaturanPage() {
   const [extTab, setExtTab] = useState<ExtTab>('satusehat');
   const [saved, setSaved] = useState(false);
   const [newRoom, setNewRoom] = useState('');
-  const [newStaff, setNewStaff] = useState({ name: '', role: 'Dokter Gigi' as const, room: 'Poli Gigi & Mulut' });
+  const [newStaff, setNewStaff] = useState({ name: '', role: '', room: 'Poli Gigi & Mulut' });
+  // Peran pegawai — wajib dari API (ms-options), tidak boleh hardcode.
+  const { items: staffRoles, isLoading: loadingStaffRoles } = useOptionGroup('staff-role');
+  const staffRoleValue = newStaff.role || staffRoles[0]?.value || '';
 
   // SATUSEHAT
   const [ssId, setSsId] = useState('11000030001');
@@ -318,11 +322,19 @@ export default function PengaturanPage() {
                   <h2 className="font-bold text-slate-800 text-sm">Pegawai</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
                     <input value={newStaff.name} onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })} placeholder="Nama pegawai" className="px-3 py-2 text-xs border border-slate-300 rounded-lg outline-none focus:border-teal-400 w-full" />
-                    <select value={newStaff.role} onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value as never })} className="px-2 py-2 text-xs border border-slate-300 rounded-lg bg-white">
-                      {['Dokter Gigi', 'Dokter Umum', 'Perawat', 'Apoteker', 'Kasir', 'Admin'].map((r) => <option key={r}>{r}</option>)}
+                    <select
+                      value={staffRoleValue}
+                      onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
+                      disabled={loadingStaffRoles && staffRoles.length === 0}
+                      className="px-2 py-2 text-xs border border-slate-300 rounded-lg bg-white"
+                    >
+                      <option value="">
+                        {loadingStaffRoles && staffRoles.length === 0 ? 'Memuat...' : '— Peran —'}
+                      </option>
+                      {staffRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                     <button
-                      onClick={() => { if (newStaff.name.trim()) { addStaff({ ...newStaff, name: newStaff.name.trim(), active: true }); setNewStaff({ name: '', role: 'Dokter Gigi', room: 'Poli Gigi & Mulut' }); } }}
+                      onClick={() => { if (newStaff.name.trim() && staffRoleValue) { addStaff({ ...newStaff, name: newStaff.name.trim(), role: staffRoleValue as never, active: true }); setNewStaff({ name: '', role: staffRoles[0]?.value ?? '', room: 'Poli Gigi & Mulut' }); } }}
                       className="inline-flex items-center justify-center gap-1 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-xs font-medium px-3 py-2 rounded-lg transition"
                     >
                       <UserPlus className="w-3.5 h-3.5" /> Tambah
@@ -418,7 +430,7 @@ export default function PengaturanPage() {
                 <h2 className="font-bold text-slate-800 text-sm flex items-center gap-2">ID SATUSEHAT</h2>
                 <p className="text-xs text-slate-500">
                   Harap lengkapi data ID SATUSEHAT, Praktisi, Organisasi dan Lokasi. Setelah melengkapi, Anda dapat
-                  melakukan registrasi pasien SATUSEHAT.
+                  melakukan pendaftaran pasien SATUSEHAT.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
@@ -482,7 +494,7 @@ export default function PengaturanPage() {
               <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 space-y-4">
                 <h2 className="font-bold text-slate-800 text-sm">Fonnte (Notifikasi WhatsApp)</h2>
                 <p className="text-xs text-slate-500">
-                  Hubungkan Fonnte untuk mengirim notifikasi booking, reminder kunjungan, dan ucapan ulang tahun
+                  Hubungkan Fonnte untuk mengirim notifikasi pemesanan, reminder kunjungan, dan ucapan ulang tahun
                   pasien via WhatsApp.
                 </p>
                 <div>

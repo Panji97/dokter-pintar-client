@@ -11,7 +11,7 @@ export default function RekamMedisPage() {
   const { state } = useClinicStore();
   const [search, setSearch] = useState('');
 
-  // Master pasien lama + registrasi terakhir tiap pasien
+  // Master pasien lama + pendaftaran terakhir tiap pasien
   // (tanggal, dokter pemeriksa, poli), urut kunjungan terbaru.
   const list = useMemo(
     () => {
@@ -70,7 +70,7 @@ export default function RekamMedisPage() {
           </div>
         </div>
 
-        {/* Daftar Pasien Registrasi */}
+        {/* Daftar Pendaftaran Pasien */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="px-4 md:px-5 py-4 border-b border-slate-100">
             <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Daftar Pasien</h2>
@@ -83,7 +83,7 @@ export default function RekamMedisPage() {
                   Daftar Pasien Belum Tersedia
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Tambahkan pasien baru melalui menu Registrasi
+                  Tambahkan pasien baru melalui menu Pendaftaran
                 </p>
               </div>
             </div>

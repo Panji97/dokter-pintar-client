@@ -60,7 +60,7 @@ export function AuthDivider() {
 
 /**
  * Kerangka halaman auth: panel brand (desktop) + kolom form (mobile logo otomatis).
- * Dipakai login, registrasi, dan lupa kata sandi agar konsisten.
+ * Dipakai login, pendaftaran, dan lupa kata sandi agar konsisten.
  */
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
@@ -88,12 +88,12 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <span className="text-teal-300">alur layanan FasKes</span> Anda.
           </h2>
           <p className="mt-4 text-sm text-slate-400 leading-relaxed max-w-sm">
-            Registrasi, rekam medis elektronik, farmasi, billing, hingga laporan —
+            Pendaftaran, rekam medis elektronik, farmasi, tagihan, hingga laporan —
             terintegrasi dalam satu platform yang dirancang untuk faskes gigi dan umum.
           </p>
           <ul className="mt-8 space-y-3">
             {[
-              { icon: ClipboardPlus, text: 'Registrasi & antrean tanpa ribet' },
+              { icon: ClipboardPlus, text: 'Pendaftaran & antrean tanpa ribet' },
               { icon: FileHeart, text: 'RME lengkap dengan odontogram digital' },
               { icon: Pill, text: 'Farmasi & stok obat terpantau real-time' },
             ].map(({ icon: Icon, text }) => (

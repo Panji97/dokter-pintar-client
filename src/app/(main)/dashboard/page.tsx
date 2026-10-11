@@ -7,8 +7,8 @@ import {
   Stethoscope, ReceiptText, AlertTriangle, CalendarClock, ChevronDown,
 } from 'lucide-react';
 
-/** ===== Dashboard FasKes: KPI + grafik kunjungan/pendapatan + 3 besar penyakit ===== */
-function DashboardFasKes() {
+/** ===== Beranda Faskes: KPI + grafik kunjungan/pendapatan + 3 besar penyakit ===== */
+function BerandaFaskes() {
   const { state } = useClinicStore();
 
   const weekRegistrations = state.registrations.filter((r) => {
@@ -54,7 +54,7 @@ function DashboardFasKes() {
       accent: 'text-teal-600',
       icon: Stethoscope,
       iconCls: 'text-teal-600',
-      sub: 'Registrasi hari ini',
+      sub: 'Pendaftaran hari ini',
       href: '/registrasi',
     },
     {
@@ -63,7 +63,7 @@ function DashboardFasKes() {
       accent: 'text-rose-600',
       icon: ReceiptText,
       iconCls: 'text-rose-500',
-      sub: `${tagihanTertunda.length} invoice tertunda`,
+      sub: `${tagihanTertunda.length} tagihan tertunda`,
       href: '/billing',
     },
     {
@@ -79,7 +79,7 @@ function DashboardFasKes() {
 
   return (
     <div className="space-y-5">
-      {/* KPI live — Mobile: 3 ubin mini sejajar (sama seperti Billing/Farmasi) */}
+      {/* KPI live — Mobile: 3 ubin mini sejajar (sama seperti Tagihan/Farmasi) */}
       <div className="md:hidden grid grid-cols-3 gap-2">
         {kpis.map((k) => (
           <a
@@ -192,25 +192,35 @@ function DashboardFasKes() {
   );
 }
 
-/** ===== Dashboard Antrean: tampilan display seperti TV ruang tunggu ===== */
-function DashboardAntrean() {
+/** ===== Layar Antrean: tampilan display seperti TV ruang tunggu ===== */
+function LayarAntrean() {
   const [now, setNow] = useState(new Date());
   const { state } = useClinicStore();
+  // Filter jenis pelayanan — opsi dari API (master pelayanan), bukan hardcode.
+  const [svcFilter, setSvcFilter] = useState('Semua');
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const current = state.registrations[0];
+  const current = svcFilter === 'Semua'
+    ? state.registrations[0]
+    : state.registrations.find((r) => r.serviceType === svcFilter);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm text-slate-600">Pilih Jenis Pelayanan</label>
-        <select className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white outline-none focus:border-teal-400">
-          <option>Semua</option>
-          <option>Pelayanan Dokter Gigi Umum</option>
+        <select
+          value={svcFilter}
+          onChange={(e) => setSvcFilter(e.target.value)}
+          className="px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white outline-none focus:border-teal-400"
+        >
+          <option value="Semua">Semua</option>
+          {state.services.map((s) => (
+            <option key={s.id} value={s.name}>{s.name}</option>
+          ))}
         </select>
         <button className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50" title="Perbesar">
           <ChevronDown className="w-4 h-4 text-slate-500" />
@@ -247,17 +257,17 @@ function DashboardAntrean() {
   );
 }
 
-export default function DashboardPage() {
+export default function BerandaPage() {
   const [tab, setTab] = useState<'faskes' | 'antrean'>('faskes');
 
   return (
     <>
-      <Topbar title="Dashboard" subtitle="Ringkasan operasional dan display antrean FasKes" />
+      <Topbar title="Beranda" subtitle="Ringkasan operasional dan layar antrean Faskes" />
       <main className="flex-1 p-4 md:p-6 space-y-5">
         <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1.5 rounded-xl text-xs sm:text-sm font-medium w-full">
           {([
-            ['faskes', 'Dashboard FasKes'],
-            ['antrean', 'Dashboard Antrean'],
+            ['faskes', 'Beranda Faskes'],
+            ['antrean', 'Layar Antrean'],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -269,7 +279,7 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {tab === 'faskes' ? <DashboardFasKes /> : <DashboardAntrean />}
+        {tab === 'faskes' ? <BerandaFaskes /> : <LayarAntrean />}
       </main>
     </>
   );

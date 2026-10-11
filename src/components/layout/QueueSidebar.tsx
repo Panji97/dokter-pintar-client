@@ -125,7 +125,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
       // untuk kunjungan (visitId) / tanggal kunjungan tersebut.
       const isPaidToday = paidByVisit || paidByPatientDate;
       const computedStatus =
-        r.status === 'Selesai' || isPaidToday ? 'Selesai' : r.status || 'Registrasi';
+        r.status === 'Selesai' || isPaidToday ? 'Selesai' : r.status || 'Pendaftaran';
 
       return {
         id: docId,
@@ -148,7 +148,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
   const selectedDate = dateFilter || todayStr;
   const isTodaySelected = !!todayStr && selectedDate === todayStr;
 
-  // Registrasi pada tanggal terpilih — default hari ini, tanpa fallback
+  // Pendaftaran pada tanggal terpilih — default hari ini, tanpa fallback
   // ke tanggal lain agar yang tampil selalu data hari yang dipilih.
   const sortedRegs = useMemo(
     () => [...registrations].sort((a, b) => b.regDate.localeCompare(a.regDate)),
@@ -163,7 +163,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
     poliFilter === 'Semua'
       ? baseRegs
       : baseRegs.filter((r) => r.room === poliFilter);
-  const waitingCount = shownRegs.filter((r) => r.status === 'Registrasi').length;
+  const waitingCount = shownRegs.filter((r) => r.status === 'Pendaftaran').length;
   const emrCount = shownRegs.filter((r) => r.status === 'Proses').length;
   const finishedCount = shownRegs.filter((r) => r.status === 'Selesai').length;
 
@@ -210,7 +210,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
               <h2 className="font-bold text-slate-800 text-sm">Status Pendaftaran Pasien</h2>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {isTodaySelected
-                  ? 'Registrasi hari ini'
+                  ? 'Pendaftaran hari ini'
                   : `Antrean ${fmtDate(selectedDate)}`}
               </p>
             </div>
@@ -283,7 +283,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
             </div>
           </div>
 
-          {/* Daftar registrasi — tinggi tetap untuk 5 baris per halaman, scroll internal */}
+          {/* Daftar pendaftaran — tinggi tetap untuk 5 baris per halaman, scroll internal */}
           <div className={listCls}>
             {pagedRegs.map((r) => (
               <button
@@ -321,7 +321,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
                     ? (isTodaySelected ? 'Belum ada pendaftaran hari ini.' : `Belum ada pendaftaran pada ${fmtDate(selectedDate)}.`)
                     : `Tidak ada antrean di ${poliFilter}.`}
                 </p>
-                <p className="text-[11px] text-slate-300 mt-1">Registrasi baru akan muncul di sini secara otomatis.</p>
+                <p className="text-[11px] text-slate-300 mt-1">Pendaftaran baru akan muncul di sini secara otomatis.</p>
               </div>
             )}
           </div>
@@ -364,7 +364,7 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
           <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">Alur Status</p>
           <ol>
             {[
-              { dot: 'bg-amber-500', label: 'Registrasi', desc: 'Pasien menunggu antrean' },
+              { dot: 'bg-amber-500', label: 'Pendaftaran', desc: 'Pasien menunggu antrean' },
               { dot: 'bg-blue-500', label: 'Proses', desc: 'Rekam medis (EMR) diisi' },
               { dot: 'bg-emerald-500', label: 'Selesai', desc: 'Pembayaran lunas', last: true },
             ].map((s) => (

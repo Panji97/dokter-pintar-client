@@ -5,6 +5,7 @@ import { useSWRConfig } from "swr";
 import { Topbar } from "@/components/layout/Topbar";
 import { useShell } from "@/components/layout/AppShell";
 import { useFetch } from "@/lib/strapi";
+import { useOptionGroup } from "@/lib/useOptions";
 import { useClinicStore } from "@/lib/ClinicStore";
 import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
 import { Patient, PatientGroup } from "@/types/clinic";
@@ -44,7 +45,7 @@ function shiftDate(refDate: string, y: number, m: number, d: number) {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
-export default function RegistrasiPage() {
+export default function PendaftaranPage() {
   const { queueOpen, setQueueOpen, setQueueSheetOpen, toast } = useShell();
   const { mutate: mutateGlobal } = useSWRConfig();
 
@@ -69,8 +70,16 @@ export default function RegistrasiPage() {
     STRAPI_ENDPOINTS.patients,
     { pagination: { pageSize: 100 }, sort: "createdAt:DESC" }
   );
+  const { data: schedulesRes, isLoading: loadingSchedules } = useFetch(
+    STRAPI_ENDPOINTS.staffSchedules,
+    { pagination: { pageSize: 200 }, sort: "createdAt:ASC" }
+  );
 
-  const loading = loadingRooms || loadingGroups || loadingServices || loadingStaff;
+  // Opsi dropdown Title & Jenis Kelamin — wajib dari API (ms-options).
+  const { items: titleOptions, isLoading: loadingTitles } = useOptionGroup("title");
+  const { items: genderOptions, isLoading: loadingGenders } = useOptionGroup("gender");
+
+  const loading = loadingRooms || loadingGroups || loadingServices || loadingStaff || loadingSchedules || loadingTitles || loadingGenders;
 
   // Tulis via ClinicStore agar state global ikut mutakhir (sumber kebenaran tunggal).
   const { addPatient, addRegistration } = useClinicStore();
@@ -78,7 +87,7 @@ export default function RegistrasiPage() {
   const [tab, setTab] = useState<Tab>("baru");
   const [search, setSearch] = useState("");
 
-  /** Tampilkan rightbar antrean agar data registrasi baru terlihat. */
+  /** Tampilkan rightbar antrean agar data pendaftaran baru terlihat. */
   const showQueue = () => {
     if (!queueOpen) setQueueOpen(true);
     if (
@@ -104,6 +113,7 @@ export default function RegistrasiPage() {
     room: "",
     serviceType: "",
     doctor: "",
+    jadwal: "",
   });
   const age = calcAge(form.birthDate, form.regDate || todayStr);
 
@@ -143,6 +153,25 @@ export default function RegistrasiPage() {
         name: s.name || "",
       }));
   }, [staffRes]);
+
+  // Jadwal dokter terpilih — dari API staff-schedules, disaring per dokter.
+  const scheduleOptions = useMemo(() => {
+    const list = ((schedulesRes?.data ?? []) as Array<{
+      documentId?: string;
+      staffName?: string;
+      day?: string;
+      startTime?: string;
+      endTime?: string;
+      room?: string;
+    }>);
+    return list
+      .filter((s) => (form.doctor ? s.staffName === form.doctor : true))
+      .map((s) => ({
+        value: `${s.day ?? ""}|${s.startTime ?? ""}|${s.endTime ?? ""}`,
+        label: `${s.day ?? ""} · ${s.startTime ?? ""}–${s.endTime ?? ""}${s.room ? ` · ${s.room}` : ""}`,
+      }))
+      .filter((o) => o.value !== "||");
+  }, [schedulesRes, form.doctor]);
 
   const patientsList = useMemo(() => {
     const list = ((patientsRes?.data ?? []) as Array<{
@@ -246,6 +275,7 @@ export default function RegistrasiPage() {
         serviceType: form.serviceType,
         room: form.room,
         doctor: form.doctor,
+        jadwal: form.jadwal || "",
         regDate: form.regDate
           ? new Date(`${form.regDate}T00:00:00`).toISOString()
           : new Date().toISOString(),
@@ -255,7 +285,7 @@ export default function RegistrasiPage() {
       mutateGlobal((key) => typeof key === "string" && key.includes(STRAPI_ENDPOINTS.registrations));
 
       toast(
-        `${form.name.trim().toUpperCase()} berhasil diregistrasi ke ${form.room}. Data antrean tampil di panel kanan.`,
+        `${form.name.trim().toUpperCase()} berhasil didaftarkan ke ${form.room}. Data antrean tampil di panel kanan.`,
       );
       setForm((f) => ({
         ...f,
@@ -269,6 +299,7 @@ export default function RegistrasiPage() {
         room: "",
         serviceType: "",
         doctor: "",
+        jadwal: "",
       }));
       showQueue();
     } catch (err) {
@@ -278,7 +309,7 @@ export default function RegistrasiPage() {
     }
   };
 
-  // Modal registrasi cepat per pasien (tombol Registrasi di tiap baris)
+  // Modal pendaftaran cepat per pasien (tombol Pendaftaran di tiap baris)
   const [regModalPatientId, setRegModalPatientId] = useState<string | null>(
     null,
   );
@@ -338,7 +369,7 @@ export default function RegistrasiPage() {
       mutateGlobal((key) => typeof key === "string" && key.includes(STRAPI_ENDPOINTS.registrations));
 
       toast(
-        `${regModalPatient.name} berhasil diregistrasi ke ${modalForm.room}. Data antrean tampil di panel kanan.`,
+        `${regModalPatient.name} berhasil didaftarkan ke ${modalForm.room}. Data antrean tampil di panel kanan.`,
       );
       setRegModalPatientId(null);
       showQueue();
@@ -364,7 +395,7 @@ export default function RegistrasiPage() {
   return (
     <>
       <Topbar
-        title="Registrasi"
+        title="Pendaftaran"
         subtitle="Pendaftaran pasien baru dan kunjungan pasien lama"
       />
       <main className="flex-1 p-4 md:p-6">
@@ -389,7 +420,7 @@ export default function RegistrasiPage() {
           {tab === "baru" ? (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm w-full">
               <div className="px-6 py-4 border-b border-slate-100">
-                <label className={labelCls}>Tgl. Registrasi</label>
+                <label className={labelCls}>Tgl. Pendaftaran</label>
                 <input
                   type="date"
                   value={form.regDate}
@@ -479,7 +510,7 @@ export default function RegistrasiPage() {
                       <select
                         value={form.doctor}
                         onChange={(e) =>
-                          setForm({ ...form, doctor: e.target.value })
+                          setForm({ ...form, doctor: e.target.value, jadwal: "" })
                         }
                         className={inputCls}
                       >
@@ -495,14 +526,30 @@ export default function RegistrasiPage() {
                     </div>
                     <div>
                       <label className={labelCls}>
-                        Jadwal Dokter <span className="text-rose-500">*</span>
+                        Jadwal Dokter
                       </label>
                       <select
-                        disabled
-                        className={`${inputCls} bg-slate-100 text-slate-400`}
+                        value={form.jadwal}
+                        onChange={(e) =>
+                          setForm({ ...form, jadwal: e.target.value })
+                        }
+                        disabled={!form.doctor}
+                        className={`${inputCls} ${!form.doctor ? "bg-slate-100 text-slate-400" : ""}`}
                       >
-                        <option>Pilih...</option>
+                        <option value="">
+                          {loadingSchedules && scheduleOptions.length === 0
+                            ? "Memuat Jadwal..."
+                            : !form.doctor
+                              ? "Pilih dokter dulu"
+                              : "Pilih Jadwal Dokter"}
+                        </option>
+                        {scheduleOptions.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
+                      {form.doctor && scheduleOptions.length === 0 && !loadingSchedules && (
+                        <p className="text-[11px] text-slate-400 mt-1">Belum ada jadwal untuk dokter ini.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -522,11 +569,12 @@ export default function RegistrasiPage() {
                         }
                         className={inputCls}
                       >
-                        <option value="">Pilih...</option>
-                        <option>Tn.</option>
-                        <option>Ny.</option>
-                        <option>An.</option>
-                        <option>By.</option>
+                        <option value="">
+                          {loadingTitles && titleOptions.length === 0 ? "Memuat..." : "Pilih..."}
+                        </option>
+                        {titleOptions.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="md:col-span-6">
@@ -553,9 +601,12 @@ export default function RegistrasiPage() {
                         }
                         className={inputCls}
                       >
-                        <option value="">Pilih...</option>
-                        <option value="L">Laki-laki</option>
-                        <option value="P">Perempuan</option>
+                        <option value="">
+                          {loadingGenders && genderOptions.length === 0 ? "Memuat..." : "Pilih..."}
+                        </option>
+                        {genderOptions.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -694,7 +745,7 @@ export default function RegistrasiPage() {
                           className="inline-flex shrink-0 items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm transition md:justify-self-end"
                         >
                           <ClipboardPlus className="w-3.5 h-3.5" />
-                          Registrasi
+                          Pendaftaran
                         </button>
                       </span>
                     </div>
@@ -755,13 +806,13 @@ export default function RegistrasiPage() {
         </div>
       </main>
 
-      {/* Modal registrasi cepat: Grup Pasien, Poli, Dokter Pemeriksa */}
+      {/* Modal pendaftaran cepat: Grup Pasien, Poli, Dokter Pemeriksa */}
       {regModalPatient && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
-          aria-label={`Registrasi ${regModalPatient.name}`}
+          aria-label={`Pendaftaran ${regModalPatient.name}`}
         >
           <div
             className="absolute inset-0 bg-black/40"
@@ -771,7 +822,7 @@ export default function RegistrasiPage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="font-bold text-slate-800">
-                  Registrasi Kunjungan
+                  Pendaftaran Kunjungan
                 </h3>
                 <p className="text-xs text-slate-500 truncate mt-0.5">
                   {regModalPatient.name} · NIK {regModalPatient.nik}
@@ -787,7 +838,7 @@ export default function RegistrasiPage() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className={labelCls}>Tgl. Registrasi</label>
+                <label className={labelCls}>Tgl. Pendaftaran</label>
                 <input
                   type="date"
                   value={modalForm.regDate}
@@ -887,7 +938,7 @@ export default function RegistrasiPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition"
               >
                 <ClipboardPlus className="w-4 h-4" />
-                Registrasi
+                Pendaftaran
               </button>
             </div>
           </div>
