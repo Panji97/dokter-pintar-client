@@ -122,6 +122,9 @@ export const clearSessionStorage = () => {
   }
 };
 
+/** Event sesi Strapi berubah (login/logout/kedaluwarsa) — didengar ClinicStore & useStrapiSession. */
+export const STRAPI_SESSION_EVENT = 'strapi-session-changed';
+
 /** Hapus sesi Strapi (mirror AppTopbar logout di HRIS). */
 export function clearStrapiSession() {
   eraseCookie('jwt');

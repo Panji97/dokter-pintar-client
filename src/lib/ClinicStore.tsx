@@ -11,7 +11,7 @@ import {
 } from '@/types/clinic';
 import { STRAPI_ENDPOINTS } from './strapi-endpoints';
 import { getLocalStorage } from './storage';
-import { logout, getSession } from './auth';
+import { logout, getSession, handleUnauthorized } from './auth';
 import { STRAPI_SESSION_EVENT } from './strapi';
 
 /**
@@ -34,6 +34,11 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  // 401 = token kedaluwarsa/tidak valid → langsung logout ke /login.
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error('Sesi kedaluwarsa. Silakan masuk kembali.');
+  }
   if (res.status === 204) return null as T;
   const json = await res.json();
   if (!res.ok) {

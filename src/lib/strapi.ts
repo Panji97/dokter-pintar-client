@@ -15,10 +15,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 import qs from 'qs';
-import { getLocalStorage, setCookie, setLocalStorage, clearStrapiSession } from './storage';
+import { getLocalStorage, setCookie, setLocalStorage, clearStrapiSession, STRAPI_SESSION_EVENT } from './storage';
+import { handleUnauthorized } from './auth';
 import { STRAPI_ENDPOINTS } from './strapi-endpoints';
 
-export const STRAPI_SESSION_EVENT = 'strapi-session-changed';
+export { STRAPI_SESSION_EVENT };
 
 function notifySessionChanged() {
   if (typeof window !== 'undefined') {
@@ -88,6 +89,10 @@ export const useFetch = (
     const res = await fetch(`${baseUrl()}${urlWithParams}`, {
       headers: authHeaders(),
     });
+    // 401 = token kedaluwarsa/tidak valid → langsung logout ke /login.
+    if (res.status === 401) {
+      handleUnauthorized();
+    }
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);
       throw new Error(errJson?.error?.message || `HTTP ${res.status}`);
@@ -132,6 +137,15 @@ export const usePost = (url: string) => {
         body: JSON.stringify(body),
       });
 
+      // 401 = token kedaluwarsa/tidak valid → langsung logout ke /login.
+      // Kembalikan bentuk error (bukan throw) sesuai kontrak result?.error pemanggil.
+      if (response.status === 401) {
+        handleUnauthorized();
+        const msg = 'Sesi kedaluwarsa. Silakan masuk kembali.';
+        setError(msg);
+        return { error: { message: msg } };
+      }
+
       const result = await response.json();
 
       setMessage(result.message);
@@ -171,6 +185,12 @@ export const useUpdate = (url: string, method: 'PUT' | 'PATCH' = 'PUT') => {
         },
         body: JSON.stringify(body),
       });
+
+      // 401 = token kedaluwarsa/tidak valid → langsung logout ke /login.
+      if (response.status === 401) {
+        handleUnauthorized();
+        throw new Error('Sesi kedaluwarsa. Silakan masuk kembali.');
+      }
 
       const result = await parseBodySafe(response);
 
@@ -215,6 +235,12 @@ export const useDelete = (url: string) => {
           Authorization: `Bearer ${jwt}`,
         },
       });
+
+      // 401 = token kedaluwarsa/tidak valid → langsung logout ke /login.
+      if (response.status === 401) {
+        handleUnauthorized();
+        throw new Error('Sesi kedaluwarsa. Silakan masuk kembali.');
+      }
 
       const result = await parseBodySafe(response);
 
@@ -298,6 +324,11 @@ export async function uploadToStrapi(files: File | File[]): Promise<number[]> {
     headers,
     body: formData,
   });
+  // 401 = token kedaluwarsa/tidak valid → langsung logout ke /login.
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error('Sesi kedaluwarsa. Silakan masuk kembali.');
+  }
   const media = await res.json();
   if (!res.ok) throw new Error(media?.error?.message || 'Upload gagal.');
   return (Array.isArray(media) ? media : [media]).map((m: { id: number }) => m.id);

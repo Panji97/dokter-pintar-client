@@ -15,8 +15,8 @@ import {
   removeLocalStorage,
   setCookie,
   eraseCookie,
+  STRAPI_SESSION_EVENT,
 } from './storage';
-import { STRAPI_SESSION_EVENT } from './strapi';
 
 export interface SessionFaskes {
   documentId: string;
@@ -75,6 +75,7 @@ function startSession(
   } catch {
     /* kuota penuh — sesi tetap berlaku di memori halaman ini */
   }
+  sessionExpired = false;
   notifySessionChanged();
   return session;
 }
@@ -84,6 +85,9 @@ function notifySessionChanged() {
     window.dispatchEvent(new Event(STRAPI_SESSION_EVENT));
   }
 }
+
+/** True sejak 401 pertama sampai sesi baru dibuat (cegah redirect berulang). */
+let sessionExpired = false;
 
 export function logout(): void {
   try {
@@ -98,7 +102,37 @@ export function logout(): void {
   } catch {
     /* abaikan */
   }
+  sessionExpired = false;
   notifySessionChanged();
+}
+
+/**
+ * Dipanggil setiap API Strapi menjawab 401: token kedaluwarsa / tidak valid
+ * → langsung logout (bersihkan sesi + JWT) dan kembali ke /login.
+ * Aman dipanggil berkali-kali (sekali jalan) dan diabaikan bila tidak ada
+ * sesi tersimpan (mis. 401 salah kata sandi di halaman login).
+ */
+export function handleUnauthorized(): void {
+  if (typeof window === 'undefined') return;
+  if (!getLocalStorage('jwt') && !getSession()) return;
+  try {
+    window.localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* abaikan */
+  }
+  try {
+    removeLocalStorage('jwt');
+    removeLocalStorage('user');
+    eraseCookie('jwt');
+  } catch {
+    /* abaikan */
+  }
+  notifySessionChanged();
+  if (sessionExpired) return;
+  sessionExpired = true;
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login';
+  }
 }
 
 /** Hasil operasi auth yang bisa gagal dengan pesan ramah. */
