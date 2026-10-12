@@ -11,6 +11,8 @@ import { EditPatientModal } from '@/components/pasien/EditPatientModal';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { uploadMedia, deleteMedia, resolveMediaUrl } from '@/lib/strapi';
+import { useSignedMediaUrls } from '@/lib/useSignedMedia';
+import { getSession } from '@/lib/auth';
 import { useIcdList, filterIcd } from '@/lib/useIcd';
 import {
   VITAL_RULES, vitalRuleOf, sanitizeNumeric, sanitizeInt,
@@ -21,7 +23,7 @@ import {
   EmrDocument, EmrPhoto, DiagnosaItem, TindakanItem, AlkesItem, KondisiGigi,
 } from '@/types/clinic';
 import {
-  Plus, Trash2, FileText, Upload, FileCheck, Loader2,
+  Plus, Trash2, FileText, Upload, FileCheck, Loader2, X, ChevronLeft, ChevronRight,
   History, Pencil,
 } from 'lucide-react';
 
@@ -233,6 +235,37 @@ export default function EmrDetailPage() {
   // ---- Unggah foto klinis (before-after) ke Strapi → MinIO bucket `dpi` ----
   const fotoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [deletingFotoId, setDeletingFotoId] = useState<number | null>(null);
+  // Konfirmasi hapus: id foto yang menunggu persetujuan user (null = tidak ada).
+  const [confirmHapusId, setConfirmHapusId] = useState<number | null>(null);
+  useEffect(() => {
+    if (confirmHapusId === null || deletingFotoId !== null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirmHapusId(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [confirmHapusId, deletingFotoId]);
+  // Bucket private → <img> memakai presigned URL batch (cache + auto-refresh).
+  const signedFoto = useSignedMediaUrls(draft.photos.map((p) => p.id));
+  const callerFaskesId = getSession()?.faskes?.documentId ?? '';
+  // Lightbox: tampilkan foto terpilih secara keseluruhan (fullscreen).
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  useEffect(() => {
+    if (lightbox === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null);
+      else if (e.key === 'ArrowRight') setLightbox((v) => (v === null ? v : (v + 1) % draft.photos.length));
+      else if (e.key === 'ArrowLeft') setLightbox((v) => (v === null ? v : (v - 1 + draft.photos.length) % draft.photos.length));
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightbox, draft.photos.length]);
 
   const uploadFoto = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -251,7 +284,9 @@ export default function EmrDetailPage() {
     setUploadingFoto(true);
     try {
       // Pola HRIS: FormData `files` → POST /api/upload → pakai id/url respons.
-      const uploaded = await uploadMedia(valid);
+      // Caption = faskesId agar endpoint signed-URL mengizinkan preview
+      // file fresh-upload (belum terhubung ke EMR).
+      const uploaded = await uploadMedia(valid, callerFaskesId ? { caption: callerFaskesId } : undefined);
       const mapped: EmrPhoto[] = uploaded.map((m) => ({
         id: m.id,
         ...(m.documentId ? { documentId: m.documentId } : {}),
@@ -259,8 +294,16 @@ export default function EmrDetailPage() {
         name: m.name,
       }));
       const photos = [...draft.photos, ...mapped];
-      setDraft({ ...draft, photos, photoCount: photos.length });
-      toast(`${mapped.length} foto terunggah ke MinIO.`);
+      const next = { ...draft, photos, photoCount: photos.length };
+      setDraft(next);
+      try {
+        // Autosave seperti klik Selesai — foto tak hilang bila halaman di-refresh
+        // tanpa sempat klik Selesai (tanpa gate validasi & tanpa buat tagihan).
+        await updateEmr(regId, next);
+        toast(`${mapped.length} foto terunggah dan tersimpan.`);
+      } catch {
+        toast('Foto terunggah, tetapi belum tersimpan — klik Selesai untuk menyimpan.');
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Upload foto gagal.');
     } finally {
@@ -269,12 +312,30 @@ export default function EmrDetailPage() {
     }
   };
 
-  const hapusFoto = (id: number) => {
+  const hapusFoto = async (id: number) => {
     const target = draft.photos.find((p) => p.id === id);
-    const photos = draft.photos.filter((p) => p.id !== id);
-    setDraft({ ...draft, photos, photoCount: photos.length });
-    // Hapus file dari MinIO juga (best-effort — draft tetap konsisten).
-    if (target) deleteMedia(target.id).catch(() => {});
+    if (!target || deletingFotoId !== null) return;
+    setDeletingFotoId(id);
+    try {
+      // DELETE /api/upload/files/:id → Strapi menghapus baris file di DB
+      // SEKALIGUS objek di MinIO (provider aws-s3: DeleteObjectCommand).
+      await deleteMedia(target.id);
+      const photos = draft.photos.filter((p) => p.id !== id);
+      const next = { ...draft, photos, photoCount: photos.length };
+      setDraft(next);
+      if (lightbox !== null) {
+        if (photos.length === 0) setLightbox(null);
+        else if (lightbox >= photos.length) setLightbox(photos.length - 1);
+      }
+      setConfirmHapusId(null);
+      toast('Foto dihapus.');
+      // Bersihkan relasi di dokumen langsung (best-effort — klik Selesai juga membersihkan).
+      updateEmr(regId, next).catch(() => {});
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Hapus foto gagal — foto tetap ada.');
+    } finally {
+      setDeletingFotoId(null);
+    }
   };
 
   if (loading || !reg) {
@@ -636,8 +697,8 @@ export default function EmrDetailPage() {
                   <Upload className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                   <h3 className="font-bold text-slate-700 text-sm">Unggah Foto Sebelum / Sesudah (Before–After)</h3>
                   <p className="text-xs text-slate-400 mt-1 mb-4">
-                    Dokumentasikan kondisi pasien sebelum dan sesudah tindakan. Foto tersimpan di MinIO
-                    dan ikut tersimpan saat klik Selesai.
+                    Dokumentasikan kondisi pasien sebelum dan sesudah tindakan. Foto langsung
+                    terunggah dan ikut tersimpan saat klik Selesai.
                   </p>
                   <input
                     ref={fotoInputRef}
@@ -665,13 +726,26 @@ export default function EmrDetailPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-slate-100 pt-4">
                     {draft.photos.map((p, i) => (
                       <div key={`${p.id}-${i}`} className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.url} alt={p.name} className="w-full h-32 object-cover" loading="lazy" />
+                        {signedFoto[p.id] ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightbox(i)}
+                            aria-label={`Lihat ${p.name} fullscreen`}
+                            className="block w-full cursor-zoom-in outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={signedFoto[p.id]} alt={p.name} className="w-full h-32 object-cover pointer-events-none" loading="lazy" />
+                          </button>
+                        ) : (
+                          <div className="w-full h-32 flex items-center justify-center bg-slate-100" aria-label="Memuat foto…">
+                            <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+                          </div>
+                        )}
                         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
                           <span className="text-[11px] text-slate-500 truncate" title={p.name}>{i + 1}. {p.name}</span>
                           <button
                             type="button"
-                            onClick={() => hapusFoto(p.id)}
+                            onClick={() => setConfirmHapusId(p.id)}
                             aria-label={`Hapus ${p.name}`}
                             className="text-rose-500 hover:text-rose-700 shrink-0"
                           >
@@ -682,6 +756,110 @@ export default function EmrDetailPage() {
                     ))}
                   </div>
                 )}
+                {/* Lightbox fullscreen — klik thumbnail untuk lihat keseluruhan */}
+                {lightbox !== null && draft.photos[lightbox] && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={`Foto ${lightbox + 1} dari ${draft.photos.length}`}
+                    className="fixed inset-0 z-[110] bg-black/90 flex flex-col"
+                    onClick={() => setLightbox(null)}
+                  >
+                    <div className="flex items-center justify-between gap-2 px-4 py-3 text-white">
+                      <span className="text-xs truncate">
+                        {lightbox + 1} / {draft.photos.length} · {draft.photos[lightbox].name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLightbox(null)}
+                        aria-label="Tutup"
+                        className="p-2 rounded-lg hover:bg-white/10 transition shrink-0"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div
+                      className="flex-1 min-h-0 flex items-center justify-center gap-2 px-2 pb-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {draft.photos.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setLightbox((lightbox - 1 + draft.photos.length) % draft.photos.length)}
+                          aria-label="Foto sebelumnya"
+                          className="p-2 rounded-full text-white hover:bg-white/10 transition shrink-0"
+                        >
+                          <ChevronLeft className="w-6 h-6" />
+                        </button>
+                      )}
+                      {signedFoto[draft.photos[lightbox].id] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={signedFoto[draft.photos[lightbox].id]}
+                          alt={draft.photos[lightbox].name}
+                          className="max-h-full max-w-full object-contain rounded-lg"
+                        />
+                      ) : (
+                        <Loader2 className="w-8 h-8 animate-spin text-white/50" />
+                      )}
+                      {draft.photos.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setLightbox((lightbox + 1) % draft.photos.length)}
+                          aria-label="Foto berikutnya"
+                          className="p-2 rounded-full text-white hover:bg-white/10 transition shrink-0"
+                        >
+                          <ChevronRight className="w-6 h-6" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Konfirmasi hapus — hapus permanen, tak bisa dikembalikan */}
+                {confirmHapusId !== null && (() => {
+                  const target = draft.photos.find((p) => p.id === confirmHapusId);
+                  if (!target) return null;
+                  const deleting = deletingFotoId === confirmHapusId;
+                  return (
+                    <div
+                      role="alertdialog"
+                      aria-modal="true"
+                      aria-label="Konfirmasi hapus foto"
+                      className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4"
+                      onClick={() => { if (!deleting) setConfirmHapusId(null); }}
+                    >
+                      <div
+                        className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-xl p-5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <h3 className="font-bold text-slate-800 text-sm">Hapus foto ini?</h3>
+                        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                          <span className="font-medium text-slate-700 break-all">{target.name}</span> akan
+                          dihapus permanen dan tidak bisa dikembalikan.
+                        </p>
+                        <div className="flex justify-end gap-2 mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmHapusId(null)}
+                            disabled={deleting}
+                            className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition disabled:opacity-50"
+                          >
+                            Batal
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => hapusFoto(target.id)}
+                            disabled={deleting}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white transition disabled:opacity-60"
+                          >
+                            {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            {deleting ? 'Menghapus…' : 'Hapus'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

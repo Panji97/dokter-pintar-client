@@ -1,8 +1,9 @@
 /**
  * Daftar endpoint Strapi dokter-pintar-server.
- * Semua modul memakai CRUD bawaan Strapi (default factories, tanpa
- * controller/service/route custom) — sama seperti kebanyakan modul di
- * hris-server-strapi.
+ * Mayoritas modul memakai CRUD bawaan Strapi (default factories) — sama
+ * seperti kebanyakan modul di hris-server-strapi. Custom API:
+ * - /api/faskes/* (multi-tenant, pola HRIS approver/register)
+ * - /api/media/signed-urls (baca file private MinIO via presigned URL batch)
  *
  * Pola URL: GET/POST /api/<plural> , GET/PUT/DELETE /api/<plural>/:documentId
  */
@@ -53,6 +54,8 @@ export const STRAPI_ENDPOINTS = {
   authLocal: '/api/auth/local',
   usersMe: '/api/users/me',
   upload: '/api/upload',
+  // baca file private MinIO (batch presigned URL, wajib login)
+  mediaSignedUrls: '/api/media/signed-urls',
   // multi-tenant faskes (custom, pola HRIS approver/register)
   faskesRegister: '/api/faskes/register',
   faskesStaff: '/api/faskes/staff',

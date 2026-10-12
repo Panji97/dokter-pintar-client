@@ -327,10 +327,22 @@ export function resolveMediaUrl(url: string): string {
 }
 
 /** Upload file ke Strapi POST /api/upload (FormData, tanpa Content-Type manual). */
-export async function uploadMedia(files: File | File[]): Promise<StrapiMedia[]> {
+export async function uploadMedia(
+  files: File | File[],
+  opts?: { caption?: string },
+): Promise<StrapiMedia[]> {
   const jwt = getLocalStorage('jwt');
+  const list = Array.isArray(files) ? files : [files];
   const formData = new FormData();
-  (Array.isArray(files) ? files : [files]).forEach((f) => formData.append('files', f));
+  list.forEach((f) => formData.append('files', f));
+  // Titip kepemilikan faskes di `caption` — dipakai endpoint signed-URL untuk
+  // mengizinkan preview file fresh-upload (belum terhubung ke EMR).
+  if (opts?.caption) {
+    formData.append(
+      'fileInfo',
+      JSON.stringify(list.map((f) => ({ name: f.name, caption: opts.caption }))),
+    );
+  }
 
   const headers: Record<string, string> = {};
   if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
@@ -359,8 +371,51 @@ export async function uploadMedia(files: File | File[]): Promise<StrapiMedia[]> 
 }
 
 /** Upload file ke Strapi POST /api/upload (FormData, tanpa Content-Type manual). */
-export async function uploadToStrapi(files: File | File[]): Promise<number[]> {
-  return (await uploadMedia(files)).map((m) => m.id);
+export async function uploadToStrapi(
+  files: File | File[],
+  opts?: { caption?: string },
+): Promise<number[]> {
+  return (await uploadMedia(files, opts)).map((m) => m.id);
+}
+
+/** Satu URL baca bertanda-tangan untuk file private MinIO. */
+export interface SignedMediaUrl {
+  id: number;
+  documentId: string;
+  name: string;
+  mime: string;
+  signedUrl: string;
+  /** Masa berlaku detik (di-respons server, default 1800). */
+  expiresIn: number;
+}
+
+/**
+ * Minta batch presigned URL ke POST /api/media/signed-urls.
+ * File milik faskes lain dilewati diam-diam oleh server (tak ada di respons).
+ */
+export async function getSignedMediaUrls(
+  ids: (number | string)[],
+  expiresIn = 1800,
+): Promise<SignedMediaUrl[]> {
+  const nums = [...new Set(ids.map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 50);
+  if (nums.length === 0) return [];
+  const res = await fetch(`${baseUrl()}${STRAPI_ENDPOINTS.mediaSignedUrls}`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ ids: nums, expiresIn }),
+  });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error('Sesi kedaluwarsa. Silakan masuk kembali.');
+  }
+  const json = await parseBodySafe(res);
+  if (!res.ok) {
+    throw new Error(
+      (json as { error?: { message?: string } })?.error?.message || 'Gagal meminta URL foto.',
+    );
+  }
+  const data = (json as { data?: SignedMediaUrl[] })?.data ?? [];
+  return Array.isArray(data) ? data : [];
 }
 
 /** Hapus file media Strapi DELETE /api/upload/files/:id (best-effort: 404 diabaikan). */
