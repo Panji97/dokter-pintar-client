@@ -566,6 +566,10 @@ interface ClinicStoreContextValue {
   /** Tambah pendaftaran baru (Pasien Baru atau Pasien Lama) */
   addRegistration: (reg: Omit<Registration, 'id' | 'status' | 'regDate'> & { regDate?: string }) => Promise<Registration>;
   addPatient: (p: Omit<Patient, 'id' | 'registeredAt'>) => Promise<Patient>;
+  /** Ubah data pasien (nama, gelar, NIK, tgl lahir, gender, telepon, alamat, gol. darah). */
+  updatePatient: (id: string, patch: Partial<Omit<Patient, 'id' | 'registeredAt' | 'allergies'>>) => Promise<Patient>;
+  /** Samakan nama pasien di semua pendaftarannya (kolom patientName denormalisasi). */
+  syncPatientName: (patientId: string, patientName: string) => Promise<void>;
   getOrCreateEmr: (regId: string) => EmrDocument;
   updateEmr: (regId: string, doc: EmrDocument) => Promise<void>;
   addInvoice: (inv: Omit<Invoice, 'id'>) => Promise<Invoice>;
@@ -895,6 +899,41 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     setState((s) => ({ ...s, patients: [withAllergies, ...s.patients] }));
     return withAllergies;
   }, []);
+
+  const updatePatient = useCallback<ClinicStoreContextValue['updatePatient']>(async (id, patch) => {
+    const payload: Record<string, unknown> = { ...patch };
+    if (typeof payload.name === 'string') payload.name = toUpperCase(payload.name);
+    await api('PUT', `${STRAPI_ENDPOINTS.patients}/${id}`, { data: payload });
+    let updated: Patient | null = null;
+    setState((s) => ({
+      ...s,
+      patients: s.patients.map((p) => {
+        if (p.id !== id) return p;
+        updated = { ...p, ...payload } as Patient;
+        return updated;
+      }),
+    }));
+    const current = updated as Patient | null;
+    if (!current) throw new Error('Pasien tidak ditemukan.');
+    return current;
+  }, []);
+
+  const syncPatientName = useCallback<ClinicStoreContextValue['syncPatientName']>(async (patientId, patientName) => {
+    const name = toUpperCase(patientName.trim());
+    const targets = state.registrations.filter((r) => r.patientId === patientId && r.patientName !== name);
+    await Promise.all(
+      targets.map((r) =>
+        api('PUT', `${STRAPI_ENDPOINTS.registrations}/${r.id}`, { data: { patientName: name } }).catch(() => null),
+      ),
+    );
+    if (targets.length > 0) {
+      const ids = new Set(targets.map((r) => r.id));
+      setState((s) => ({
+        ...s,
+        registrations: s.registrations.map((r) => (ids.has(r.id) ? { ...r, patientName: name } : r)),
+      }));
+    }
+  }, [state.registrations]);
 
   const addRegistration = useCallback<ClinicStoreContextValue['addRegistration']>(async (reg) => {
     const { regDate, ...rest } = reg;
@@ -1243,6 +1282,8 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       ensureModule,
       addRegistration,
       addPatient,
+      updatePatient,
+      syncPatientName,
       getOrCreateEmr,
       updateEmr,
       addInvoice,
@@ -1262,7 +1303,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       resetAll,
     }),
     [
-      state, loading, refresh, ensureModule, addRegistration, addPatient, getOrCreateEmr, updateEmr,
+      state, loading, refresh, ensureModule, addRegistration, addPatient, updatePatient, syncPatientName, getOrCreateEmr, updateEmr,
       addInvoice, payInvoice, addApotekInvoice, addBooking, updateBookingStatus,
       addLetter, addReferral, updateMedicineStock, addPenyesuaian, updateRoom, addRoom,
       removeRoom, addStaff, toggleStaffActive, resetAll,

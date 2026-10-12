@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { useShell } from '@/components/layout/AppShell';
 import { Odontogram } from '@/components/rme/Odontogram';
+import { EditPatientModal } from '@/components/pasien/EditPatientModal';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { useIcdList, filterIcd } from '@/lib/useIcd';
@@ -20,7 +21,7 @@ import {
 } from '@/types/clinic';
 import {
   Plus, Trash2, FileText, Upload, FileCheck, FileSignature, ShieldCheck, ClipboardCheck,
-  History,
+  History, Pencil,
 } from 'lucide-react';
 
 type MainTab = 'riwayat' | 'so' | 'ap' | 'p';
@@ -85,6 +86,10 @@ export default function EmrDetailPage() {
   const [newDiag, setNewDiag] = useState<DiagnosaItem>({ id: '', type: 'Diagnosa dokter', icd10Code: '', icd10Desc: '' });
   const [newTindakan, setNewTindakan] = useState<TindakanItem>({ id: '', code: 'PK0053', name: 'JPKM', tooth: '-', qty: 1, price: 350000, discount: 0 });
   const [newAlkes, setNewAlkes] = useState<AlkesItem>({ id: '', code: 'BHP5', name: 'ALKES 5', qty: 1, price: 95000 });
+
+  // Ubah data diri pasien dari header (komponen bersama EditPatientModal).
+  const [editPatientOpen, setEditPatientOpen] = useState(false);
+  const patient = reg ? state.patients.find((p) => p.id === reg.patientId) : undefined;
 
   // Master ICD-10 dari API (bukan hardcode) — dipakai di tab Asesmen.
   const { items: icdList, isLoading: icdLoading, error: icdError } = useIcdList('ICD-10');
@@ -279,6 +284,17 @@ export default function EmrDetailPage() {
               </div>
             ))}
           </div>
+          {patient && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setEditPatientOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 rounded-lg transition"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Ubah Data Pasien
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1287,6 +1303,15 @@ export default function EmrDetailPage() {
         )}
 
       </main>
+
+      {/* Modal ubah data diri pasien (komponen bersama) */}
+      <EditPatientModal
+        patient={editPatientOpen ? (patient ?? null) : null}
+        onClose={() => setEditPatientOpen(false)}
+        onSaved={() => {
+          mutateGlobal((key) => typeof key === 'string' && key.includes(STRAPI_ENDPOINTS.registrations));
+        }}
+      />
     </>
   );
 }

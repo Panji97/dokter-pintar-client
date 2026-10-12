@@ -9,7 +9,8 @@ import { useOptionGroup } from "@/lib/useOptions";
 import { useClinicStore } from "@/lib/ClinicStore";
 import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
 import { Patient, PatientGroup } from "@/types/clinic";
-import { Search, ClipboardPlus, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { EditPatientModal } from "@/components/pasien/EditPatientModal";
+import { Search, ClipboardPlus, ChevronLeft, ChevronRight, X, Pencil } from "lucide-react";
 
 type Tab = "baru" | "lama";
 
@@ -378,6 +379,12 @@ export default function PendaftaranPage() {
     }
   };
 
+  // Pasien yang dibuka di modal ubah (komponen bersama EditPatientModal).
+  const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const editPatient = editPatientId
+    ? (patientsList.find((x) => x.id === editPatientId) ?? null)
+    : null;
+
   // Tutup modal dengan tombol Escape
   useEffect(() => {
     if (!regModalPatientId) return;
@@ -709,7 +716,7 @@ export default function PendaftaranPage() {
                 </div>
               </div>
               {/* Daftar pasien: kartu di semua view, NIK kolom sendiri di desktop */}
-              <div className="hidden md:grid grid-cols-[1fr_220px_120px] gap-3 px-5 py-2.5 bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 font-semibold">
+              <div className="hidden md:grid grid-cols-[1fr_220px_250px] gap-3 px-5 py-2.5 bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 font-semibold">
                 <span className="pl-[52px]">Nama Pasien</span>
                 <span>NIK</span>
                 <span className="text-right">Aksi</span>
@@ -719,7 +726,7 @@ export default function PendaftaranPage() {
                   return (
                     <div
                       key={p.id}
-                      className="w-full text-left px-4 md:px-5 py-3.5 transition grid grid-cols-1 md:grid-cols-[1fr_220px_120px] md:items-center gap-2 md:gap-3 hover:bg-slate-50"
+                      className="w-full text-left px-4 md:px-5 py-3.5 transition grid grid-cols-1 md:grid-cols-[1fr_220px_250px] md:items-center gap-2 md:gap-3 hover:bg-slate-50"
                     >
                       <span className="flex items-center gap-3 min-w-0">
                         <span className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-slate-100 text-slate-500">
@@ -734,14 +741,23 @@ export default function PendaftaranPage() {
                           {p.name}
                         </span>
                       </span>
-                      <span className="flex items-center justify-between gap-2 md:contents">
-                        <span className="font-mono text-[11px] text-slate-400 md:text-xs md:text-slate-500 md:truncate pl-[52px] md:pl-0 min-w-0 truncate">
-                          <span className="md:hidden">NIK </span>
-                          {p.nik}
-                        </span>
+                      <span className="font-mono text-[11px] text-slate-400 md:text-xs md:text-slate-500 md:truncate pl-[52px] md:pl-0 min-w-0 truncate">
+                        <span className="md:hidden">NIK </span>
+                        {p.nik}
+                      </span>
+                      <span className="flex gap-2 pl-[52px] md:pl-0 md:justify-end">
+                        <button
+                          onClick={() => setEditPatientId(p.id)}
+                          aria-label={`Ubah data ${p.name}`}
+                          title="Ubah data pasien"
+                          className="inline-flex flex-1 md:flex-none items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 active:bg-slate-100 rounded-lg transition"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Ubah
+                        </button>
                         <button
                           onClick={() => openRegModal(p.id)}
-                          className="inline-flex shrink-0 items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm transition md:justify-self-end"
+                          className="inline-flex flex-1 md:flex-none items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm transition"
                         >
                           <ClipboardPlus className="w-3.5 h-3.5" />
                           Pendaftaran
@@ -942,6 +958,13 @@ export default function PendaftaranPage() {
           </div>
         </div>
       )}
+
+      {/* Modal ubah data pasien (komponen bersama) */}
+      <EditPatientModal
+        patient={editPatient}
+        onClose={() => setEditPatientId(null)}
+        onSaved={() => mutatePatients()}
+      />
     </>
   );
 }
