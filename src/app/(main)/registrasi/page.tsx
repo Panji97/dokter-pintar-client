@@ -424,7 +424,6 @@ export default function PendaftaranPage() {
                 <input
                   type="date"
                   value={form.regDate}
-                  max={todayStr}
                   onChange={(e) =>
                     setForm({ ...form, regDate: e.target.value })
                   }
@@ -842,7 +841,6 @@ export default function PendaftaranPage() {
                 <input
                   type="date"
                   value={modalForm.regDate}
-                  max={todayStr}
                   onChange={(e) =>
                     setModalForm({ ...modalForm, regDate: e.target.value })
                   }

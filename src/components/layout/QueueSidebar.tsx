@@ -1,24 +1,31 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ClipboardPlus, CalendarDays, Stethoscope, SlidersHorizontal, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useShell } from './AppShell';
-import { useFetch } from '@/lib/strapi';
-import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
-import { fmtDate } from '@/lib/ClinicStore';
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  ClipboardPlus,
+  CalendarDays,
+  Stethoscope,
+  SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { useShell } from "./AppShell";
+import { useFetch } from "@/lib/strapi";
+import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
+import { fmtDate } from "@/lib/ClinicStore";
 
 /** Tanggal lokal YYYY-MM-DD (hindari bug UTC: toISOString bisa mundur 1 hari di WIB). */
 function getLocalDateStr(d: Date = new Date()): string {
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
 /** Ambil tanggal lokal YYYY-MM-DD dari ISO datetime (regDate disimpan tengah malam lokal). */
 function toLocalDateStr(iso: string): string {
-  if (!iso) return '';
+  if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
   return getLocalDateStr(d);
@@ -37,15 +44,15 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
 
   const { data: roomsRes } = useFetch(STRAPI_ENDPOINTS.rooms, {
     pagination: { pageSize: 100 },
-    sort: 'createdAt:ASC',
+    sort: "createdAt:ASC",
   });
   const { data: regsRes } = useFetch(STRAPI_ENDPOINTS.registrations, {
     pagination: { pageSize: 100 },
-    sort: 'regDate:DESC',
+    sort: "regDate:DESC",
   });
   const { data: invsRes } = useFetch(STRAPI_ENDPOINTS.invoices, {
     pagination: { pageSize: 100 },
-    sort: 'createdAt:DESC',
+    sort: "createdAt:DESC",
   });
 
   const openEmr = (regId: string) => {
@@ -57,13 +64,15 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
   // Diisi setelah mount agar HTML server & hidrasi klien pertama identik.
   // new Date() saat render menghasilkan daftar berbeda (hydration mismatch).
   // Pakai tanggal LOKAL — toISOString (UTC) mundur 1 hari untuk WIB.
-  const [todayStr, setTodayStr] = useState('');
+  const [todayStr, setTodayStr] = useState("");
   useEffect(() => {
     setTodayStr(getLocalDateStr());
   }, []);
 
   const rooms = useMemo(() => {
-    return ((roomsRes?.data ?? []) as Array<{ name?: string }>).map((r) => r.name || '').filter(Boolean);
+    return ((roomsRes?.data ?? []) as Array<{ name?: string }>)
+      .map((r) => r.name || "")
+      .filter(Boolean);
   }, [roomsRes]);
 
   const registrations = useMemo(() => {
@@ -78,13 +87,18 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
         paidAt?: string;
         paymentStatus?: string;
       }>
-    ).filter((inv) => inv.paymentStatus === 'Lunas');
+    ).filter((inv) => inv.paymentStatus === "Lunas");
 
     // 1) visitId exact (documentId maupun id numerik, dinormalisasi ke string)
     const paidVisitIds = new Set(
       paidInvs
-        .filter((inv) => inv.visitId !== null && inv.visitId !== undefined && String(inv.visitId) !== '')
-        .map((inv) => String(inv.visitId))
+        .filter(
+          (inv) =>
+            inv.visitId !== null &&
+            inv.visitId !== undefined &&
+            String(inv.visitId) !== "",
+        )
+        .map((inv) => String(inv.visitId)),
     );
 
     // 2) fallback pasien + tanggal kunjungan (bila visitId kosong / tidak cocok):
@@ -93,58 +107,74 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
       paidInvs
         .map((inv) => {
           const pid =
-            String(inv.patientId || '').toUpperCase().trim() ||
-            String(inv.patientName || '').toUpperCase().trim();
-          const d = (inv.date || '').slice(0, 10) || (inv.paidAt || '').slice(0, 10);
-          return pid && d ? `${pid}__${d}` : '';
+            String(inv.patientId || "")
+              .toUpperCase()
+              .trim() ||
+            String(inv.patientName || "")
+              .toUpperCase()
+              .trim();
+          const d =
+            (inv.date || "").slice(0, 10) || (inv.paidAt || "").slice(0, 10);
+          return pid && d ? `${pid}__${d}` : "";
         })
-        .filter(Boolean)
+        .filter(Boolean),
     );
 
-    return ((regsRes?.data ?? []) as Array<{
-      id?: string | number;
-      documentId?: string;
-      regDate?: string;
-      patientId?: string;
-      patientName?: string;
-      room?: string;
-      doctor?: string;
-      status?: string;
-    }>).map((r) => {
-      const docId = r.documentId || String(r.id ?? '');
-      const rawId = String(r.id ?? '');
-      const regLocalDate = toLocalDateStr(r.regDate || '');
+    return (
+      (regsRes?.data ?? []) as Array<{
+        id?: string | number;
+        documentId?: string;
+        regDate?: string;
+        patientId?: string;
+        patientName?: string;
+        room?: string;
+        doctor?: string;
+        status?: string;
+      }>
+    ).map((r) => {
+      const docId = r.documentId || String(r.id ?? "");
+      const rawId = String(r.id ?? "");
+      const regLocalDate = toLocalDateStr(r.regDate || "");
 
-      const paidByVisit = paidVisitIds.has(docId) || (rawId !== '' && paidVisitIds.has(rawId));
+      const paidByVisit =
+        paidVisitIds.has(docId) || (rawId !== "" && paidVisitIds.has(rawId));
       const pkey =
-        String(r.patientId || '').toUpperCase().trim() ||
-        String(r.patientName || '').toUpperCase().trim();
+        String(r.patientId || "")
+          .toUpperCase()
+          .trim() ||
+        String(r.patientName || "")
+          .toUpperCase()
+          .trim();
       const paidByPatientDate =
-        !!pkey && !!regLocalDate && paidPatientDate.has(`${pkey}__${regLocalDate}`);
+        !!pkey &&
+        !!regLocalDate &&
+        paidPatientDate.has(`${pkey}__${regLocalDate}`);
       // Selesai bila: status server sudah Selesai, atau ada payment Lunas
       // untuk kunjungan (visitId) / tanggal kunjungan tersebut.
       const isPaidToday = paidByVisit || paidByPatientDate;
       const computedStatus =
-        r.status === 'Selesai' || isPaidToday ? 'Selesai' : r.status || 'Pendaftaran';
+        r.status === "Selesai" || isPaidToday
+          ? "Selesai"
+          : r.status || "Pendaftaran";
 
       return {
         id: docId,
-        regDate: r.regDate || '',
-        patientName: r.patientName || '',
-        room: r.room || '',
-        doctor: r.doctor || '',
+        regDate: r.regDate || "",
+        patientName: r.patientName || "",
+        room: r.room || "",
+        doctor: r.doctor || "",
         status: computedStatus,
       };
     });
   }, [regsRes, invsRes]);
 
   // Filter antrean berdasarkan poli.
-  const [poliFilter, setPoliFilter] = useState('Semua');
+  const [poliFilter, setPoliFilter] = useState("Semua");
   const poliOptions = useMemo(() => rooms, [rooms]);
 
   // Filter tanggal antrean — default hari ini agar user bisa melihat
   // antrean pasien pada tanggal-tanggal lain.
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState("");
   const selectedDate = dateFilter || todayStr;
   const isTodaySelected = !!todayStr && selectedDate === todayStr;
 
@@ -152,20 +182,25 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
   // ke tanggal lain agar yang tampil selalu data hari yang dipilih.
   const sortedRegs = useMemo(
     () => [...registrations].sort((a, b) => b.regDate.localeCompare(a.regDate)),
-    [registrations]
+    [registrations],
   );
   const dateRegs = useMemo(
-    () => (selectedDate ? sortedRegs.filter((r) => toLocalDateStr(r.regDate) === selectedDate) : []),
-    [sortedRegs, selectedDate]
+    () =>
+      selectedDate
+        ? sortedRegs.filter((r) => toLocalDateStr(r.regDate) === selectedDate)
+        : [],
+    [sortedRegs, selectedDate],
   );
   const baseRegs = dateRegs;
   const shownRegs =
-    poliFilter === 'Semua'
+    poliFilter === "Semua"
       ? baseRegs
       : baseRegs.filter((r) => r.room === poliFilter);
-  const waitingCount = shownRegs.filter((r) => r.status === 'Pendaftaran').length;
-  const emrCount = shownRegs.filter((r) => r.status === 'Proses').length;
-  const finishedCount = shownRegs.filter((r) => r.status === 'Selesai').length;
+  const waitingCount = shownRegs.filter(
+    (r) => r.status === "Pendaftaran",
+  ).length;
+  const emrCount = shownRegs.filter((r) => r.status === "Proses").length;
+  const finishedCount = shownRegs.filter((r) => r.status === "Selesai").length;
 
   // Pagination daftar antrean (5 per halaman).
   const PAGE_SIZE = 5;
@@ -175,42 +210,49 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
   }, [selectedDate, poliFilter]);
   const totalPages = Math.max(1, Math.ceil(shownRegs.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pagedRegs = shownRegs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pagedRegs = shownRegs.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
 
   const cardCls = bare
-    ? 'overflow-hidden'
-    : 'bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden';
+    ? "overflow-hidden"
+    : "bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden";
   const legendCls = bare
-    ? 'py-2'
-    : 'bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5';
+    ? "py-2"
+    : "bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2.5";
   // Kepadatan khusus desktop (non-bare): padding dirampingkan agar
   // ALUR STATUS ikut terlihat tanpa scroll panel. Mobile/sheet (bare) tetap lega.
   // ALUR STATUS sendiri tidak diubah sama sekali.
   // Mobile & desktop SAMA-SAMA between: kartu status mentok atas,
   // ALUR STATUS mentok bawah (min-h menyesuaikan wadahnya).
   const asideCls = bare
-    ? 'w-full shrink-0 flex flex-col min-h-[calc(100dvh-24px)]'
-    : 'w-full shrink-0 flex flex-col min-h-[calc(100dvh-92px)]';
-  const wrapCls = 'flex-1 flex flex-col gap-3';
-  const pxHead = bare ? 'px-1 py-2.5' : 'px-3 py-2';
-  const pxFilter = bare ? 'px-1 py-2' : 'px-3 py-2';
-  const pxItem = bare ? 'px-1 py-2' : 'px-3 py-2';
-  const pxPager = bare ? 'px-1 py-2' : 'px-3 py-1.5';
-  const summaryPy = bare ? 'py-3' : 'py-2';
+    ? "w-full shrink-0 flex flex-col min-h-[calc(100dvh-24px)]"
+    : "w-full shrink-0 flex flex-col min-h-[calc(100dvh-92px)]";
+  const wrapCls = "flex-1 flex flex-col gap-3";
+  const pxHead = bare ? "px-1 py-2.5" : "px-3 py-2";
+  const pxFilter = bare ? "px-1 py-2" : "px-3 py-2";
+  const pxItem = bare ? "px-1 py-2" : "px-3 py-2";
+  const pxPager = bare ? "px-1 py-2" : "px-3 py-1.5";
+  const summaryPy = bare ? "py-3" : "py-2";
   const listCls = bare
-    ? 'h-[300px] overflow-y-auto divide-y divide-slate-50'
-    : 'h-[270px] overflow-y-auto divide-y divide-slate-50';
+    ? "h-[300px] overflow-y-auto divide-y divide-slate-50"
+    : "h-[270px] overflow-y-auto divide-y divide-slate-50";
 
   return (
     <aside className={asideCls}>
       <div className={wrapCls}>
         <div className={cardCls}>
-          <div className={`${pxHead} border-b border-slate-100 flex items-center justify-between gap-2`}>
+          <div
+            className={`${pxHead} border-b border-slate-100 flex items-center justify-between gap-2`}
+          >
             <div className="min-w-0">
-              <h2 className="font-bold text-slate-800 text-sm">Status Pendaftaran Pasien</h2>
+              <h2 className="font-bold text-slate-800 text-sm">
+                Status Pendaftaran Pasien
+              </h2>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {isTodaySelected
-                  ? 'Pendaftaran hari ini'
+                  ? "Pendaftaran hari ini"
                   : `Antrean ${fmtDate(selectedDate)}`}
               </p>
             </div>
@@ -222,29 +264,43 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
           {/* Ringkasan status */}
           <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
             <div className={`px-2 text-center ${summaryPy}`}>
-              <div className="text-lg font-bold text-amber-600">{waitingCount}</div>
-              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Menunggu</div>
+              <div className="text-lg font-bold text-amber-600">
+                {waitingCount}
+              </div>
+              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">
+                Menunggu
+              </div>
             </div>
             <div className={`px-2 text-center ${summaryPy}`}>
               <div className="text-lg font-bold text-blue-600">{emrCount}</div>
-              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">EMR / Proses</div>
+              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">
+                EMR / Proses
+              </div>
             </div>
             <div className={`px-2 text-center ${summaryPy}`}>
-              <div className="text-lg font-bold text-emerald-600">{finishedCount}</div>
-              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Selesai</div>
+              <div className="text-lg font-bold text-emerald-600">
+                {finishedCount}
+              </div>
+              <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">
+                Selesai
+              </div>
             </div>
           </div>
 
           {/* Filter antrean: tanggal + poli dalam satu kelompok */}
-          <div className={`${pxFilter} border-b border-slate-100 bg-slate-50/60`}>
-            <div className={`flex items-center justify-between ${bare ? 'mb-2' : 'mb-1.5'}`}>
+          <div
+            className={`${pxFilter} border-b border-slate-100 bg-slate-50/60`}
+          >
+            <div
+              className={`flex items-center justify-between ${bare ? "mb-2" : "mb-1.5"}`}
+            >
               <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
                 <SlidersHorizontal className="w-3 h-3" />
                 Filter Antrean
               </span>
               {!isTodaySelected && (
                 <button
-                  onClick={() => setDateFilter('')}
+                  onClick={() => setDateFilter("")}
                   title="Kembali ke hari ini"
                   className="shrink-0 px-2 py-0.5 text-[10px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-full transition"
                 >
@@ -252,20 +308,23 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
                 </button>
               )}
             </div>
-            <div className={bare ? 'space-y-2' : 'space-y-1.5'}>
-              <div className={`flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 focus-within:border-teal-400 transition ${bare ? 'py-1.5' : 'py-1'}`}>
+            <div className={bare ? "space-y-2" : "space-y-1.5"}>
+              <div
+                className={`flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 focus-within:border-teal-400 transition ${bare ? "py-1.5" : "py-1"}`}
+              >
                 <CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <input
                   id="queue-date-filter"
                   type="date"
                   aria-label="Tanggal antrean"
                   value={selectedDate}
-                  max={todayStr || undefined}
                   onChange={(e) => setDateFilter(e.target.value)}
                   className="flex-1 min-w-0 text-xs bg-transparent outline-none text-slate-700"
                 />
               </div>
-              <div className={`flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 focus-within:border-teal-400 transition ${bare ? 'py-1.5' : 'py-1'}`}>
+              <div
+                className={`flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 focus-within:border-teal-400 transition ${bare ? "py-1.5" : "py-1"}`}
+              >
                 <Stethoscope className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <select
                   id="queue-poli-filter"
@@ -276,7 +335,9 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
                 >
                   <option value="Semua">Semua Poli</option>
                   {poliOptions.map((p) => (
-                    <option key={p} value={p}>{p}</option>
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -292,21 +353,30 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
                 className={`w-full text-left ${pxItem} flex items-center gap-2 hover:bg-slate-50 transition`}
               >
                 <div className="w-8 h-8 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center text-[11px] font-bold shrink-0">
-                  {r.patientName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                  {r.patientName
+                    .split(" ")
+                    .map((w) => w[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-800 truncate">{r.patientName}</div>
+                  <div className="text-sm font-medium text-slate-800 truncate">
+                    {r.patientName}
+                  </div>
                   <div className="text-[11px] text-slate-400 truncate">
-                    {isTodaySelected ? `${r.room} · ${r.doctor}` : `${fmtDate(r.regDate)} · ${r.room} · ${r.doctor}`}
+                    {isTodaySelected
+                      ? `${r.room} · ${r.doctor}`
+                      : `${fmtDate(r.regDate)} · ${r.room} · ${r.doctor}`}
                   </div>
                 </div>
                 <span
                   className={`text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 ${
-                    r.status === 'Selesai'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : r.status === 'Proses'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-amber-100 text-amber-700'
+                    r.status === "Selesai"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : r.status === "Proses"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-amber-100 text-amber-700"
                   }`}
                 >
                   {r.status}
@@ -314,23 +384,33 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
               </button>
             ))}
             {shownRegs.length === 0 && (
-              <div className={`text-center ${bare ? 'px-4 py-10' : 'px-4 py-6'}`}>
+              <div
+                className={`text-center ${bare ? "px-4 py-10" : "px-4 py-6"}`}
+              >
                 <ClipboardPlus className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                 <p className="text-xs text-slate-400">
-                  {poliFilter === 'Semua'
-                    ? (isTodaySelected ? 'Belum ada pendaftaran hari ini.' : `Belum ada pendaftaran pada ${fmtDate(selectedDate)}.`)
+                  {poliFilter === "Semua"
+                    ? isTodaySelected
+                      ? "Belum ada pendaftaran hari ini."
+                      : `Belum ada pendaftaran pada ${fmtDate(selectedDate)}.`
                     : `Tidak ada antrean di ${poliFilter}.`}
                 </p>
-                <p className="text-[11px] text-slate-300 mt-1">Pendaftaran baru akan muncul di sini secara otomatis.</p>
+                <p className="text-[11px] text-slate-300 mt-1">
+                  Pendaftaran baru akan muncul di sini secara otomatis.
+                </p>
               </div>
             )}
           </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className={`shrink-0 flex items-center justify-between ${pxPager} border-t border-slate-100 ${bare ? '' : 'bg-white'}`}>
+            <div
+              className={`shrink-0 flex items-center justify-between ${pxPager} border-t border-slate-100 ${bare ? "" : "bg-white"}`}
+            >
               <span className="text-[10px] text-slate-400">
-                {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, shownRegs.length)} dari {shownRegs.length}
+                {(safePage - 1) * PAGE_SIZE + 1}–
+                {Math.min(safePage * PAGE_SIZE, shownRegs.length)} dari{" "}
+                {shownRegs.length}
               </span>
               <span className="flex items-center gap-1">
                 <button
@@ -361,25 +441,48 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
         <div className="mt-auto flex flex-col gap-3 shrink-0">
           <div aria-hidden="true" className="border-t border-slate-200" />
           <div className={legendCls}>
-          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">Alur Status</p>
-          <ol>
-            {[
-              { dot: 'bg-amber-500', label: 'Pendaftaran', desc: 'Pasien menunggu antrean' },
-              { dot: 'bg-blue-500', label: 'Proses', desc: 'Rekam medis (EMR) diisi' },
-              { dot: 'bg-emerald-500', label: 'Selesai', desc: 'Pembayaran lunas', last: true },
-            ].map((s) => (
-              <li key={s.label} className="flex gap-2.5">
-                <span className="flex flex-col items-center shrink-0">
-                  <span className={`w-2.5 h-2.5 rounded-full mt-0.5 ${s.dot}`} />
-                  {!s.last && <span className="w-px flex-1 bg-slate-200 my-0.5" />}
-                </span>
-                <span className={!s.last ? 'pb-2.5' : ''}>
-                  <span className="block text-[11px] font-bold text-slate-700 leading-tight">{s.label}</span>
-                  <span className="block text-[10px] text-slate-400 leading-tight">{s.desc}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">
+              Alur Status
+            </p>
+            <ol>
+              {[
+                {
+                  dot: "bg-amber-500",
+                  label: "Pendaftaran",
+                  desc: "Pasien menunggu antrean",
+                },
+                {
+                  dot: "bg-blue-500",
+                  label: "Proses",
+                  desc: "Rekam medis (EMR) diisi",
+                },
+                {
+                  dot: "bg-emerald-500",
+                  label: "Selesai",
+                  desc: "Pembayaran lunas",
+                  last: true,
+                },
+              ].map((s) => (
+                <li key={s.label} className="flex gap-2.5">
+                  <span className="flex flex-col items-center shrink-0">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full mt-0.5 ${s.dot}`}
+                    />
+                    {!s.last && (
+                      <span className="w-px flex-1 bg-slate-200 my-0.5" />
+                    )}
+                  </span>
+                  <span className={!s.last ? "pb-2.5" : ""}>
+                    <span className="block text-[11px] font-bold text-slate-700 leading-tight">
+                      {s.label}
+                    </span>
+                    <span className="block text-[10px] text-slate-400 leading-tight">
+                      {s.desc}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
       </div>
