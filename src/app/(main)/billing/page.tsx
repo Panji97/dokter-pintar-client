@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, Fragment } from 'react';
 import { useSWRConfig } from 'swr';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
@@ -9,7 +9,7 @@ import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import type { Invoice } from '@/types/clinic';
 import {
   Search, Receipt, Pill, ShieldCheck, Plus, Printer, Banknote, QrCode, CreditCard, Wallet,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ChevronDown,
 } from 'lucide-react';
 
 type Tab = 'pasien' | 'apotek' | 'klaim';
@@ -107,6 +107,40 @@ function TagihanPager({ safePage, totalPages, total, unit, onPage }: {
   );
 }
 
+/** Isi rincian pembayaran satu tagihan — dipakai di kartu mobile & baris tabel. */
+function RincianBayar({ inv }: { inv: Invoice }) {
+  const rows: Array<[string, number, boolean?]> = [
+    ['Konsultasi', inv.consultationFee],
+    ['Tindakan', inv.procedureFee],
+    ['Alkes', inv.alkesFee],
+    ['Obat', inv.medicineFee],
+  ];
+  return (
+    <div className="bg-slate-50/70 border-t border-dashed border-slate-200 px-4 py-3 text-sm space-y-1">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">Rincian Pembayaran</p>
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex justify-between gap-3">
+          <span className="text-slate-500">{label}</span>
+          <span className="text-slate-800 font-medium">{fmtRupiah(value)}</span>
+        </div>
+      ))}
+      <div className="flex justify-between gap-3">
+        <span className="text-slate-500">Diskon</span>
+        <span className="text-rose-600 font-medium">−{fmtRupiah(inv.discount)}</span>
+      </div>
+      <div className="flex justify-between gap-3 border-t border-slate-200 pt-1.5">
+        <span className="font-semibold text-slate-700">Total Bayar</span>
+        <span className="font-bold text-emerald-600">{fmtRupiah(inv.total)}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 pt-1 text-[11px] text-slate-500">
+        <span>Status: <b className={inv.paymentStatus === 'Lunas' ? 'text-emerald-600' : 'text-rose-600'}>{inv.paymentStatus}</b></span>
+        {inv.paymentMethod && <span>Metode: <b className="text-slate-700">{inv.paymentMethod}</b></span>}
+        {inv.paidAt && <span>Tgl. Bayar: <b className="text-slate-700">{fmtDate(inv.paidAt)}</b></span>}
+      </div>
+    </div>
+  );
+}
+
 export default function TagihanPage() {
   const { state, payInvoice, addApotekInvoice, ensureModule } = useClinicStore();
   const { mutate: mutateGlobal } = useSWRConfig();
@@ -117,6 +151,8 @@ export default function TagihanPage() {
   }, [ensureModule]);
   const [search, setSearch] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
+  // Rincian tagihan yang dibuka (klik baris/kartu) — tanpa tombol baru.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   // Metode pembayaran — wajib dari API (ms-options), tidak boleh hardcode.
   const { items: paymentMethods, isLoading: loadingMethods } = useOptionGroup('payment-method');
   const [method, setMethod] = useState('');
@@ -258,17 +294,28 @@ export default function TagihanPage() {
                 />
               </div>
             </div>
-            {/* Mobile: kartu tagihan */}
+            {/* Mobile: kartu tagihan — klik kartu untuk rincian */}
             <div className="md:hidden divide-y divide-slate-100">
-              {pagedInvoices.items.map((inv) => (
-                <div key={inv.id} className="px-4 py-3.5 space-y-1">
+              {pagedInvoices.items.map((inv) => {
+                const open = expandedId === inv.id;
+                return (
+                <div key={inv.id}>
+                <div
+                  onClick={() => setExpandedId(open ? null : inv.id)}
+                  aria-expanded={open}
+                  title="Klik untuk rincian pembayaran"
+                  className={`px-4 py-3.5 space-y-1 cursor-pointer transition ${open ? 'bg-teal-50/50' : 'hover:bg-slate-50'}`}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-medium text-slate-800 text-sm truncate">{inv.patientName}</div>
+                    <span className="inline-flex items-center gap-1.5 shrink-0">
                     {inv.paymentStatus === 'Lunas' ? (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 shrink-0">Lunas</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Lunas</span>
                     ) : (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 shrink-0">Belum Dibayar</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">Belum Dibayar</span>
                     )}
+                      <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </span>
                   </div>
                   <div className="text-[11px] text-slate-400 truncate">
                     {fmtDate(inv.date)} · {inv.group} · {inv.doctor}
@@ -280,19 +327,22 @@ export default function TagihanPage() {
                     <span className="font-bold text-slate-800">{fmtRupiah(inv.total)}</span>
                     {inv.paymentStatus === 'Belum Dibayar' ? (
                       <button
-                        onClick={() => { setPaying(inv.id); setMethod('Tunai'); setDiscount(0); }}
+                        onClick={(e) => { e.stopPropagation(); setPaying(inv.id); setMethod(''); setDiscount(0); }}
                         className="text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-3.5 py-2 rounded-lg transition shrink-0"
                       >
                         Bayar
                       </button>
                     ) : (
-                      <button onClick={() => window.print()} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-2 rounded-lg transition shrink-0">
+                      <button onClick={(e) => { e.stopPropagation(); window.print(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-2 rounded-lg transition shrink-0">
                         <Printer className="w-3 h-3" /> Cetak
                       </button>
                     )}
                   </div>
                 </div>
-              ))}
+                {open && <RincianBayar inv={inv} />}
+                </div>
+                );
+              })}
               {filteredInvoices.length === 0 && (
                 <p className="px-4 py-10 text-center text-xs text-slate-400">Belum ada tagihan. Tagihan dibuat otomatis saat rekam medis diselesaikan.</p>
               )}
@@ -311,8 +361,16 @@ export default function TagihanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {pagedInvoices.items.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50 transition">
+                {pagedInvoices.items.map((inv) => {
+                  const open = expandedId === inv.id;
+                  return (
+                  <Fragment key={inv.id}>
+                  <tr
+                    onClick={() => setExpandedId(open ? null : inv.id)}
+                    aria-expanded={open}
+                    title="Klik untuk rincian pembayaran"
+                    className={`cursor-pointer transition ${open ? 'bg-teal-50/50 hover:bg-teal-50' : 'hover:bg-slate-50'}`}
+                  >
                     <td className="px-4 py-3 text-xs text-slate-600">{fmtDate(inv.date)}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-800">{inv.patientName}</div>
@@ -332,21 +390,33 @@ export default function TagihanPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <span className="inline-flex items-center gap-2">
                       {inv.paymentStatus === 'Belum Dibayar' ? (
                         <button
-                          onClick={() => { setPaying(inv.id); setMethod('Tunai'); setDiscount(0); }}
+                          onClick={(e) => { e.stopPropagation(); setPaying(inv.id); setMethod(''); setDiscount(0); }}
                           className="text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-md transition"
                         >
                           Bayar
                         </button>
                       ) : (
-                        <button onClick={() => window.print()} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md transition">
+                        <button onClick={(e) => { e.stopPropagation(); window.print(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md transition">
                           <Printer className="w-3 h-3" /> Cetak
                         </button>
                       )}
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                      </span>
                     </td>
                   </tr>
-                ))}
+                  {open && (
+                    <tr className="bg-slate-50/50">
+                      <td colSpan={7} className="px-4 py-0">
+                        <RincianBayar inv={inv} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })}
                 {filteredInvoices.length === 0 && (
                   <tr><td colSpan={7} className="px-4 py-10 text-center text-xs text-slate-400">Belum ada tagihan. Tagihan dibuat otomatis saat rekam medis diselesaikan.</td></tr>
                 )}
