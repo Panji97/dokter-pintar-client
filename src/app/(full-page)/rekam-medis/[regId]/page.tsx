@@ -7,13 +7,13 @@ import Link from 'next/link';
 import { Topbar } from '@/components/layout/Topbar';
 import { useShell } from '@/components/layout/AppShell';
 import { Odontogram } from '@/components/rme/Odontogram';
+import { IcdCombobox } from '@/components/rme/IcdCombobox';
 import { EditPatientModal } from '@/components/pasien/EditPatientModal';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { uploadMedia, deleteMedia, resolveMediaUrl } from '@/lib/strapi';
 import { useSignedMediaUrls } from '@/lib/useSignedMedia';
 import { getSession } from '@/lib/auth';
-import { useIcdList, filterIcd } from '@/lib/useIcd';
 import {
   VITAL_RULES, vitalRuleOf, sanitizeNumeric, sanitizeInt,
   vitalError, tensiPairError, toothError, gravidaError, qtyError,
@@ -93,11 +93,6 @@ export default function EmrDetailPage() {
   // Ubah data diri pasien dari header (komponen bersama EditPatientModal).
   const [editPatientOpen, setEditPatientOpen] = useState(false);
   const patient = reg ? state.patients.find((p) => p.id === reg.patientId) : undefined;
-
-  // Master ICD-10 dari API (bukan hardcode) — dipakai di tab Asesmen.
-  const { items: icdList, isLoading: icdLoading, error: icdError } = useIcdList('ICD-10');
-  const [icdKeyword, setIcdKeyword] = useState('');
-  const filteredIcd = useMemo(() => filterIcd(icdList, icdKeyword), [icdList, icdKeyword]);
 
   const totals = useMemo(() => {
     const tindakan = draft.tindakan.reduce((s, t) => s + t.qty * t.price - t.discount, 0);
@@ -640,9 +635,13 @@ export default function EmrDetailPage() {
                   ['gigiAnomali', 'Gigi Anomali'],
                   ['lainLain', 'Lain-lain'],
                 ] as const).map(([key, label]) => (
-                  <div key={key}>
+                  <div key={key} className={key === 'lainLain' ? 'md:col-span-2' : ''}>
                     <label className={labelCls}>{label}</label>
-                    <input maxLength={TEXT_LIMITS.input} value={draft.anamnesaOdontogram[key]} onChange={(e) => setDraft({ ...draft, anamnesaOdontogram: { ...draft.anamnesaOdontogram, [key]: e.target.value } })} className={inputCls} />
+                    {key === 'lainLain' ? (
+                      <textarea rows={3} maxLength={TEXT_LIMITS.textarea} value={draft.anamnesaOdontogram[key]} onChange={(e) => setDraft({ ...draft, anamnesaOdontogram: { ...draft.anamnesaOdontogram, [key]: e.target.value } })} className={inputCls} />
+                    ) : (
+                      <input maxLength={TEXT_LIMITS.input} value={draft.anamnesaOdontogram[key]} onChange={(e) => setDraft({ ...draft, anamnesaOdontogram: { ...draft.anamnesaOdontogram, [key]: e.target.value } })} className={inputCls} />
+                    )}
                   </div>
                 ))}
               </div>
@@ -986,17 +985,6 @@ export default function EmrDetailPage() {
 
             {apTab === 'diagnosa' && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
-                <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {(['Diagnosa dokter', 'Asuhan keperawatan'] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setNewDiag({ ...newDiag, type: t })}
-                      className={subTabCls(newDiag.type === t)}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
                 {/* Mobile: daftar diagnosa */}
                 <div className="md:hidden space-y-3">
                   {draft.diagnosa.map((d) => (
@@ -1004,7 +992,6 @@ export default function EmrDetailPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-mono text-xs font-bold text-teal-700">{d.icd10Code}</span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{d.type}</span>
                         </div>
                         <div className="text-sm text-slate-700 mt-1">{d.icd10Desc}</div>
                       </div>
@@ -1025,7 +1012,6 @@ export default function EmrDetailPage() {
                 <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
-                      <th className="px-4 py-2.5 font-semibold">Tipe</th>
                       <th className="px-4 py-2.5 font-semibold">Kode ICD-10</th>
                       <th className="px-4 py-2.5 font-semibold">Diagnosa</th>
                       <th className="px-4 py-2.5 font-semibold text-right">Aksi</th>
@@ -1034,7 +1020,6 @@ export default function EmrDetailPage() {
                   <tbody className="divide-y divide-slate-50">
                     {draft.diagnosa.map((d) => (
                       <tr key={d.id}>
-                        <td className="px-4 py-2.5 text-xs text-slate-600">{d.type}</td>
                         <td className="px-4 py-2.5 font-mono text-xs text-teal-700">{d.icd10Code}</td>
                         <td className="px-4 py-2.5 text-slate-700">{d.icd10Desc}</td>
                         <td className="px-4 py-2.5 text-right">
@@ -1045,43 +1030,17 @@ export default function EmrDetailPage() {
                       </tr>
                     ))}
                     {draft.diagnosa.length === 0 && (
-                      <tr><td colSpan={4} className="px-4 py-4 text-center text-xs text-slate-400">Data diagnosa belum tersedia. Tambahkan di bawah.</td></tr>
+                      <tr><td colSpan={3} className="px-4 py-4 text-center text-xs text-slate-400">Data diagnosa belum tersedia. Tambahkan di bawah.</td></tr>
                     )}
                   </tbody>
                 </table></div>
                 <div className="flex flex-wrap gap-2 items-end border-t border-slate-100 pt-4">
                   <div className="flex-1 min-w-56">
                     <label className={labelCls}>ICD-10 (dari API)</label>
-                    <input
-                      value={icdKeyword}
-                      onChange={(e) => setIcdKeyword(e.target.value)}
-                      placeholder="Cari kode / deskripsi…"
-                      className={`${inputCls} mb-2`}
-                    />
-                    <select
+                    <IcdCombobox
                       value={newDiag.icd10Code}
-                      onChange={(e) => {
-                        const found = icdList.find((c) => c.code === e.target.value);
-                        setNewDiag({ ...newDiag, icd10Code: e.target.value, icd10Desc: found?.desc ?? '' });
-                      }}
-                      className={inputCls}
-                      disabled={icdLoading || !!icdError}
-                    >
-                      <option value="">
-                        {icdLoading ? '— Memuat ICD dari API… —' : icdError ? '— Gagal memuat ICD —' : '— Pilih kode ICD-10 —'}
-                      </option>
-                      {filteredIcd.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.desc}</option>)}
-                    </select>
-                    {icdError && (
-                      <p className="text-[11px] text-rose-600 mt-1 leading-tight">
-                        Gagal memuat master ICD dari API. Periksa koneksi / permission role Strapi untuk GET /api/ms-icds.
-                      </p>
-                    )}
-                    {!icdLoading && !icdError && filteredIcd.length === 0 && (
-                      <p className="text-[11px] text-slate-400 mt-1 leading-tight">
-                        {icdList.length === 0 ? 'Master ICD di API masih kosong.' : 'Tidak ada kode yang cocok dengan pencarian.'}
-                      </p>
-                    )}
+                      onChange={(code, item) => setNewDiag({ ...newDiag, icd10Code: code, icd10Desc: item?.desc ?? '' })}
+                    />
                   </div>
                   <button
                     onClick={() => {
@@ -1089,12 +1048,12 @@ export default function EmrDetailPage() {
                         toast('Pilih kode ICD-10 dulu.');
                         return;
                       }
-                      if (draft.diagnosa.some((d) => d.type === newDiag.type && d.icd10Code === newDiag.icd10Code)) {
+                      if (draft.diagnosa.some((d) => d.icd10Code === newDiag.icd10Code)) {
                         toast('Diagnosa tersebut sudah ada di daftar.');
                         return;
                       }
-                      setDraft({ ...draft, diagnosa: [...draft.diagnosa, { ...newDiag, id: `dg-${Date.now()}` }] });
-                      setNewDiag({ id: '', type: newDiag.type, icd10Code: '', icd10Desc: '' });
+                      setDraft({ ...draft, diagnosa: [...draft.diagnosa, { ...newDiag, type: 'Diagnosa dokter', id: `dg-${Date.now()}` }] });
+                      setNewDiag({ id: '', type: 'Diagnosa dokter', icd10Code: '', icd10Desc: '' });
                     }}
                     className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-lg transition"
                   >
@@ -1180,8 +1139,8 @@ export default function EmrDetailPage() {
                   </tbody>
                 </table></div>
 
-                <div className="flex flex-wrap gap-2 items-end border-t border-slate-100 pt-4">
-                  <div className="w-40">
+                <div className="grid grid-cols-2 md:grid-cols-[1fr_7rem_6rem_auto] gap-2.5 md:gap-3 items-end border-t border-slate-100 pt-4">
+                  <div className="col-span-2 md:col-span-1 min-w-0">
                     <label className={labelCls}>Tindakan (Master)</label>
                     <select
                       value={newTindakan.code}
@@ -1194,7 +1153,7 @@ export default function EmrDetailPage() {
                       {state.services.map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
                     </select>
                   </div>
-                  <div className="w-24">
+                  <div className="min-w-0">
                     <label className={labelCls}>Posisi Gigi</label>
                     <input
                       value={newTindakan.tooth}
@@ -1209,7 +1168,7 @@ export default function EmrDetailPage() {
                       <p className="text-[11px] text-rose-600 mt-1 leading-tight">FDI 11–48 / “-”</p>
                     )}
                   </div>
-                  <div className="w-20">
+                  <div className="min-w-0">
                     <label className={labelCls}>Jml</label>
                     <input
                       value={newTindakan.qty}
@@ -1241,7 +1200,7 @@ export default function EmrDetailPage() {
                       }
                       setDraft({ ...draft, tindakan: [...draft.tindakan, { ...newTindakan, id: `tn-${Date.now()}` }] });
                     }}
-                    className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-lg transition"
+                    className="col-span-2 md:col-span-1 inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition whitespace-nowrap"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Tindakan
                   </button>
