@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useClinicStore } from '@/lib/ClinicStore';
 import { useShell } from '@/components/layout/AppShell';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
+import { FormModal } from '@/components/ui/form-modal';
 
 const inputCls = 'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400';
 const labelCls = 'text-xs font-medium text-slate-600 block mb-1';
@@ -21,17 +22,25 @@ export function ServiceCrud() {
   const { confirm, dialog } = useConfirmDialog();
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const openAdd = () => {
+    setForm(emptyForm);
+    setEditingId(null);
+    setModalOpen(true);
+  };
   const startEdit = (id: string) => {
     const s = state.services.find((x) => x.id === id);
     if (!s) return;
     setForm({ code: s.code, name: s.name, room: s.room, price: s.price });
     setEditingId(id);
+    setModalOpen(true);
   };
   const cancel = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setModalOpen(false);
   };
 
   const submit = async () => {
@@ -77,48 +86,17 @@ export function ServiceCrud() {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 md:px-5 py-4 border-b border-slate-100 space-y-3">
+      <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
         <div>
-          <h2 className="font-bold text-slate-800 text-sm">{editingId ? 'Ubah Pelayanan' : 'Tambah Pelayanan'}</h2>
+          <h2 className="font-bold text-slate-800 text-sm">Daftar Pelayanan ({state.services.length})</h2>
           <p className="text-[11px] text-slate-400 mt-0.5">Dipakai di dropdown Tindakan (Master) rekam medis.</p>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-[8rem_1fr_10rem_8rem_auto] gap-2.5 items-end">
-          <div className="min-w-0 order-1 md:order-none">
-            <label className={labelCls}>Kode *</label>
-            <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="PK0053" maxLength={20} className={`${inputCls} font-mono`} />
-          </div>
-          <div className="col-span-2 md:col-span-1 min-w-0 order-3 md:order-none">
-            <label className={labelCls}>Nama Pelayanan *</label>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="cth. Penambalan" maxLength={80} className={inputCls} />
-          </div>
-          <div className="col-span-2 md:col-span-1 min-w-0 order-4 md:order-none">
-            <label className={labelCls}>Poli *</label>
-            <select value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} className={inputCls}>
-              <option value="">— Pilih —</option>
-              {state.rooms.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
-            </select>
-          </div>
-          <div className="min-w-0 order-2 md:order-none">
-            <label className={labelCls}>Tarif (Rp) *</label>
-            <input
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: Math.max(0, Number(e.target.value.replace(/[^0-9]/g, '') || 0)) })}
-              inputMode="numeric"
-              autoComplete="off"
-              className={inputCls}
-            />
-          </div>
-          <div className="col-span-2 md:col-span-1 flex gap-2 order-5 md:order-none">
-            {editingId && (
-              <button onClick={cancel} className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition">
-                <X className="w-3.5 h-3.5" /> Batal
-              </button>
-            )}
-            <button onClick={submit} disabled={saving} className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition disabled:opacity-60">
-              {editingId ? 'Simpan' : <><Plus className="w-3.5 h-3.5" /> Tambah</>}
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={openAdd}
+          className="inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" /> Tambah
+        </button>
       </div>
 
       <div className="md:hidden divide-y divide-slate-100">
@@ -180,6 +158,42 @@ export function ServiceCrud() {
         </tbody>
       </table></div>
       {dialog}
+      <FormModal
+        open={modalOpen}
+        title={editingId ? 'Ubah Pelayanan' : 'Tambah Pelayanan'}
+        submitLabel={editingId ? 'Simpan' : 'Tambah'}
+        saving={saving}
+        onClose={cancel}
+        onSubmit={submit}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div className="min-w-0">
+            <label className={labelCls}>Kode *</label>
+            <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="PK0053" maxLength={20} className={`${inputCls} font-mono`} />
+          </div>
+          <div className="min-w-0">
+            <label className={labelCls}>Tarif (Rp) *</label>
+            <input
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: Math.max(0, Number(e.target.value.replace(/[^0-9]/g, '') || 0)) })}
+              inputMode="numeric"
+              autoComplete="off"
+              className={inputCls}
+            />
+          </div>
+          <div className="col-span-2 min-w-0">
+            <label className={labelCls}>Nama Pelayanan *</label>
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="cth. Penambalan" maxLength={80} className={inputCls} />
+          </div>
+          <div className="col-span-2 min-w-0">
+            <label className={labelCls}>Poli *</label>
+            <select value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} className={inputCls}>
+              <option value="">— Pilih —</option>
+              {state.rooms.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+            </select>
+          </div>
+        </div>
+      </FormModal>
     </div>
   );
 }

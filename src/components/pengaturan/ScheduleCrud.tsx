@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useClinicStore } from '@/lib/ClinicStore';
 import { useShell } from '@/components/layout/AppShell';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
+import { FormModal } from '@/components/ui/form-modal';
 
 const inputCls = 'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400';
 const labelCls = 'text-xs font-medium text-slate-600 block mb-1';
@@ -18,20 +19,28 @@ export function ScheduleCrud() {
   const { confirm, dialog } = useConfirmDialog();
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const staffOptions = state.staff.filter((s) => s.active).map((s) => s.name);
   const roomValue = form.room || state.rooms[0]?.name || '';
 
+  const openAdd = () => {
+    setForm(emptyForm);
+    setEditingId(null);
+    setModalOpen(true);
+  };
   const startEdit = (id: string) => {
     const s = state.schedules.find((x) => x.id === id);
     if (!s) return;
     setForm({ staffName: s.staffName, day: s.day, startTime: s.startTime, endTime: s.endTime, room: s.room });
     setEditingId(id);
+    setModalOpen(true);
   };
   const cancel = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setModalOpen(false);
   };
 
   const submit = async () => {
@@ -72,48 +81,14 @@ export function ScheduleCrud() {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 md:px-5 py-4 border-b border-slate-100 space-y-3">
-        <h2 className="font-bold text-slate-800 text-sm">{editingId ? 'Ubah Jadwal' : 'Tambah Jadwal'}</h2>
-        <div className="grid grid-cols-2 md:grid-cols-[1fr_8rem_7rem_7rem_10rem_auto] gap-2.5 items-end">
-          <div className="col-span-2 md:col-span-1 min-w-0">
-            <label className={labelCls}>Pegawai *</label>
-            <select value={form.staffName} onChange={(e) => setForm({ ...form, staffName: e.target.value })} className={inputCls}>
-              <option value="">— Pilih —</option>
-              {staffOptions.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <div className="min-w-0">
-            <label className={labelCls}>Hari *</label>
-            <select value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })} className={inputCls}>
-              {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
-          <div className="min-w-0">
-            <label className={labelCls}>Mulai *</label>
-            <input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className={inputCls} />
-          </div>
-          <div className="min-w-0">
-            <label className={labelCls}>Selesai *</label>
-            <input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} className={inputCls} />
-          </div>
-          <div className="min-w-0">
-            <label className={labelCls}>Poli *</label>
-            <select value={roomValue} onChange={(e) => setForm({ ...form, room: e.target.value })} className={inputCls}>
-              <option value="">— Pilih —</option>
-              {state.rooms.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
-            </select>
-          </div>
-          <div className="col-span-2 md:col-span-1 flex gap-2">
-            {editingId && (
-              <button onClick={cancel} className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded-lg text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition">
-                <X className="w-3.5 h-3.5" /> Batal
-              </button>
-            )}
-            <button onClick={submit} disabled={saving} className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition disabled:opacity-60">
-              {editingId ? 'Simpan' : <><Plus className="w-3.5 h-3.5" /> Tambah</>}
-            </button>
-          </div>
-        </div>
+      <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
+        <h2 className="font-bold text-slate-800 text-sm">Daftar Jadwal ({state.schedules.length})</h2>
+        <button
+          onClick={openAdd}
+          className="inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" /> Tambah
+        </button>
       </div>
 
       <div className="md:hidden divide-y divide-slate-100">
@@ -171,6 +146,45 @@ export function ScheduleCrud() {
         </tbody>
       </table></div>
       {dialog}
+      <FormModal
+        open={modalOpen}
+        title={editingId ? 'Ubah Jadwal' : 'Tambah Jadwal'}
+        submitLabel={editingId ? 'Simpan' : 'Tambah'}
+        saving={saving}
+        onClose={cancel}
+        onSubmit={submit}
+      >
+        <div>
+          <label className={labelCls}>Pegawai *</label>
+          <select value={form.staffName} onChange={(e) => setForm({ ...form, staffName: e.target.value })} className={inputCls}>
+            <option value="">— Pilih —</option>
+            {staffOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="min-w-0">
+            <label className={labelCls}>Hari *</label>
+            <select value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })} className={inputCls}>
+              {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div className="min-w-0">
+            <label className={labelCls}>Mulai *</label>
+            <input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className={inputCls} />
+          </div>
+          <div className="min-w-0">
+            <label className={labelCls}>Selesai *</label>
+            <input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} className={inputCls} />
+          </div>
+        </div>
+        <div>
+          <label className={labelCls}>Poli *</label>
+          <select value={roomValue} onChange={(e) => setForm({ ...form, room: e.target.value })} className={inputCls}>
+            <option value="">— Pilih —</option>
+            {state.rooms.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+          </select>
+        </div>
+      </FormModal>
     </div>
   );
 }
