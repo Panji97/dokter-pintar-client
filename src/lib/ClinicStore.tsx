@@ -132,6 +132,14 @@ function relDocId(v: unknown): string | null {
 /** Semua nama pasien & dokter selalu huruf kapital (UPPERCASE). */
 export const toUpperCase = (s: string) => s.toUpperCase();
 
+/**
+ * Normalisasi SEMUA input teks user menjadi kapital sebelum tersimpan.
+ * Satu-satunya yang dikecualikan: kredensial (password/email), id/relasi
+ * (documentId), tanggal, angka, dan nama file — semua diproses di call-site.
+ */
+export const upText = (v: unknown): string =>
+  typeof v === 'string' ? v.trim().toUpperCase() : v == null ? '' : String(v).trim().toUpperCase();
+
 /* ============================================================
  * Persistensi relasional (tanpa kolom JSON): tiap baris anak punya
  * tabel/endpoint sendiri, kolom skalar tersimpan per kolom.
@@ -234,35 +242,35 @@ function emrScalars(doc: EmrDocument): Record<string, unknown> {
   const p: PemeriksaanUmum = doc.pemeriksaanUmum;
   return {
     regId: doc.regId,
-    riwayatPenyakit: a.riwayatPenyakit,
-    keluhanUtama: a.keluhanUtama,
-    keluhanTambahan: a.keluhanTambahan,
-    penyakitSaatIni: a.penyakitSaatIni,
-    gravida: a.gravida,
-    alergiGatal: a.alergi.gatal,
-    alergiDebu: a.alergi.debu,
-    alergiObat: a.alergi.obat,
-    alergiMakanan: a.alergi.makanan,
-    alergiLainnya: a.alergi.lainnya,
-    alergiUdara: a.alergi.udara,
-    occlusi: o.occlusi,
-    torusPlatinus: o.torusPlatinus,
-    torusMandibularis: o.torusMandibularis,
-    palatum: o.palatum,
-    diastema: o.diastema,
-    gigiAnomali: o.gigiAnomali,
-    odontoLain: o.lainLain,
-    deskripsiPemeriksaan: p.deskripsi,
-    nadi: p.nadi,
-    tensiSistolik: p.tensiSistolik,
-    tensiDiastolik: p.tensiDiastolik,
-    suhu: p.suhu,
-    beratBadan: p.beratBadan,
-    tinggiBadan: p.tinggiBadan,
-    pernapasan: p.pernapasan,
-    mata: p.mata,
-    gigiMulut: p.gigiMulut,
-    kulit: p.kulit,
+    riwayatPenyakit: upText(a.riwayatPenyakit),
+    keluhanUtama: upText(a.keluhanUtama),
+    keluhanTambahan: upText(a.keluhanTambahan),
+    penyakitSaatIni: upText(a.penyakitSaatIni),
+    gravida: upText(a.gravida),
+    alergiGatal: upText(a.alergi.gatal),
+    alergiDebu: upText(a.alergi.debu),
+    alergiObat: upText(a.alergi.obat),
+    alergiMakanan: upText(a.alergi.makanan),
+    alergiLainnya: upText(a.alergi.lainnya),
+    alergiUdara: upText(a.alergi.udara),
+    occlusi: upText(o.occlusi),
+    torusPlatinus: upText(o.torusPlatinus),
+    torusMandibularis: upText(o.torusMandibularis),
+    palatum: upText(o.palatum),
+    diastema: upText(o.diastema),
+    gigiAnomali: upText(o.gigiAnomali),
+    odontoLain: upText(o.lainLain),
+    deskripsiPemeriksaan: upText(p.deskripsi),
+    nadi: upText(p.nadi),
+    tensiSistolik: upText(p.tensiSistolik),
+    tensiDiastolik: upText(p.tensiDiastolik),
+    suhu: upText(p.suhu),
+    beratBadan: upText(p.beratBadan),
+    tinggiBadan: upText(p.tinggiBadan),
+    pernapasan: upText(p.pernapasan),
+    mata: upText(p.mata),
+    gigiMulut: upText(p.gigiMulut),
+    kulit: upText(p.kulit),
     dokumenGeneralConsent: doc.dokumen.generalConsent,
     dokumenAsesmenAwal: doc.dokumen.asesmenAwal,
     dokumenInformedConsent: doc.dokumen.informedConsent,
@@ -463,7 +471,7 @@ async function saveEmrChildren(docId: string, faskesId: string, doc: EmrDocument
   // Buat baru — tiap tabel punya endpoint sendiri (tanpa JSON).
   for (const k of doc.kondisi) {
     await postRow(E.emrKondisi, {
-      toothNumber: k.toothNumber, deskripsi: k.deskripsi, emr_document: docId, faskes: faskesId,
+      toothNumber: k.toothNumber, deskripsi: upText(k.deskripsi), emr_document: docId, faskes: faskesId,
     });
   }
   for (const [num, t] of Object.entries(doc.odontogram)) {
@@ -476,25 +484,25 @@ async function saveEmrChildren(docId: string, faskesId: string, doc: EmrDocument
       surfaceLeft: surf.left ?? null,
       surfaceRight: surf.right ?? null,
       surfaceCenter: surf.center ?? null,
-      notes: t.notes ?? null,
+      notes: t.notes ? upText(t.notes) : null,
       emr_document: docId,
       faskes: faskesId,
     });
   }
   for (const x of doc.diagnosa) {
     await postRow(E.emrDiagnosa, {
-      tipe: x.type, icd10Code: x.icd10Code, icd10Desc: x.icd10Desc, emr_document: docId, faskes: faskesId,
+      tipe: x.type, icd10Code: upText(x.icd10Code), icd10Desc: upText(x.icd10Desc), emr_document: docId, faskes: faskesId,
     });
   }
   for (const x of doc.tindakan) {
     await postRow(E.emrTindakan, {
-      code: x.code, name: x.name, tooth: x.tooth, qty: x.qty, price: x.price, discount: x.discount,
+      code: upText(x.code), name: upText(x.name), tooth: upText(x.tooth), qty: x.qty, price: x.price, discount: x.discount,
       emr_document: docId, faskes: faskesId,
     });
   }
   for (const x of doc.alkes) {
     await postRow(E.emrAlkes, {
-      code: x.code, name: x.name, qty: x.qty, price: x.price, emr_document: docId, faskes: faskesId,
+      code: upText(x.code), name: upText(x.name), qty: x.qty, price: x.price, emr_document: docId, faskes: faskesId,
     });
   }
   const resepGroups: Array<['apotek' | 'rujukan', ResepApotek[]]> = [
@@ -508,7 +516,7 @@ async function saveEmrChildren(docId: string, faskesId: string, doc: EmrDocument
       });
       for (const it of list[i].items) {
         await postRow(E.emrResepItem, {
-          code: it.code, name: it.name, qty: it.qty, price: it.price, resep: resepId, faskes: faskesId,
+          code: upText(it.code), name: upText(it.name), qty: it.qty, price: it.price, resep: resepId, faskes: faskesId,
         });
       }
     }
@@ -625,6 +633,22 @@ interface ClinicStoreContextValue {
   removeRoom: (id: string) => Promise<void>;
   addStaff: (s: Omit<Staff, 'id'>) => Promise<Staff>;
   toggleStaffActive: (id: string) => Promise<void>;
+  /** Master pelayanan (dropdown Tindakan di rekam medis membaca state yang sama). */
+  addService: (s: Omit<Service, 'id'>) => Promise<Service>;
+  updateService: (s: Service) => Promise<void>;
+  removeService: (id: string) => Promise<void>;
+  addPackage: (p: Omit<ServicePackage, 'id'>) => Promise<ServicePackage>;
+  updatePackage: (p: ServicePackage) => Promise<void>;
+  removePackage: (id: string) => Promise<void>;
+  addDiscount: (d: Omit<ServiceDiscount, 'id'>) => Promise<ServiceDiscount>;
+  updateDiscount: (d: ServiceDiscount) => Promise<void>;
+  toggleDiscountActive: (id: string) => Promise<void>;
+  removeDiscount: (id: string) => Promise<void>;
+  addSchedule: (s: Omit<StaffSchedule, 'id'>) => Promise<StaffSchedule>;
+  updateSchedule: (s: StaffSchedule) => Promise<void>;
+  removeSchedule: (id: string) => Promise<void>;
+  /** Ubah profil faskes sendiri (nama/alamat/telepon). */
+  updateFaskesProfile: (docId: string, patch: { name?: string; address?: string; phone?: string }) => Promise<void>;
   resetAll: () => Promise<void>;
 }
 
@@ -921,7 +945,9 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.patients, {
       data: {
         ...rest,
-        name: toUpperCase(p.name),
+        name: upText(p.name),
+        title: p.title ? upText(p.title) : p.title,
+        address: upText(p.address),
         registeredAt: new Date().toISOString().slice(0, 10),
         faskes: currentFaskesId(),
       },
@@ -931,17 +957,19 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     for (const alergen of allergies ?? []) {
       if (!alergen) continue;
       await postRow(STRAPI_ENDPOINTS.patientAllergies, {
-        alergen, patient: patientId, faskes: currentFaskesId(),
+        alergen: upText(alergen), patient: patientId, faskes: currentFaskesId(),
       }).catch(() => null);
     }
-    const withAllergies: Patient = { ...created, allergies: allergies ?? [] };
+    const withAllergies: Patient = { ...created, name: upText(p.name), allergies: (allergies ?? []).map(upText) };
     setState((s) => ({ ...s, patients: [withAllergies, ...s.patients] }));
     return withAllergies;
   }, []);
 
   const updatePatient = useCallback<ClinicStoreContextValue['updatePatient']>(async (id, patch) => {
     const payload: Record<string, unknown> = { ...patch };
-    if (typeof payload.name === 'string') payload.name = toUpperCase(payload.name);
+    if (typeof payload.name === 'string') payload.name = upText(payload.name);
+    if (typeof payload.title === 'string') payload.title = upText(payload.title);
+    if (typeof payload.address === 'string') payload.address = upText(payload.address);
     await api('PUT', `${STRAPI_ENDPOINTS.patients}/${id}`, { data: payload });
     let updated: Patient | null = null;
     setState((s) => ({
@@ -979,8 +1007,12 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.registrations, {
       data: {
         ...rest,
-        patientName: toUpperCase(rest.patientName),
-        doctor: toUpperCase(rest.doctor),
+        patientName: upText(rest.patientName),
+        group: upText(rest.group),
+        serviceType: upText(rest.serviceType),
+        room: upText(rest.room),
+        doctor: upText(rest.doctor),
+        jadwal: rest.jadwal ? upText(rest.jadwal) : rest.jadwal,
         regDate: regDate ?? new Date().toISOString(),
         status: 'Pendaftaran',
         // Relasi: pendaftaran → pasien & faskes (kunci string tetap dipertahankan).
@@ -1179,6 +1211,8 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       data: {
         ...rest,
         patientName: toUpperCase(bk.patientName),
+        phone: bk.phone,
+        serviceType: upText(bk.serviceType),
         doctor: toUpperCase(bk.doctor),
         faskes: currentFaskesId(),
         // Relasi ke pasien bila booking terhubung ke pasien terdaftar.
@@ -1208,6 +1242,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         ...rest,
         patientName: toUpperCase(l.patientName),
         doctor: toUpperCase(l.doctor),
+        notes: upText(l.notes),
         faskes: currentFaskesId(),
         // Relasi: surat → pasien.
         ...(patientId ? { patient: patientId } : {}),
@@ -1225,6 +1260,8 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         ...rest,
         patientName: toUpperCase(r.patientName),
         doctor: toUpperCase(r.doctor),
+        destination: upText(r.destination),
+        diagnosis: upText(r.diagnosis),
         faskes: currentFaskesId(),
         // Relasi: rujukan → pasien.
         ...(patientId ? { patient: patientId } : {}),
@@ -1253,16 +1290,16 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     const { items, ...rest } = adj;
     const faskesId = currentFaskesId();
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.penyesuaian, {
-      data: { ...rest, faskes: faskesId },
+      data: { ...rest, nota: upText(adj.nota), pic: upText(adj.pic), faskes: faskesId },
     });
     const adjId = res.data.documentId;
     const createdItems: Penyesuaian['items'] = [];
     for (const it of items ?? []) {
       const rowId = await postRow(STRAPI_ENDPOINTS.penyesuaianItems, {
-        code: it.code, name: it.name, stockBefore: it.stockBefore, stockAfter: it.stockAfter,
-        reason: it.reason, penyesuaian: adjId, faskes: faskesId,
+        code: upText(it.code), name: upText(it.name), stockBefore: it.stockBefore, stockAfter: it.stockAfter,
+        reason: upText(it.reason), penyesuaian: adjId, faskes: faskesId,
       });
-      createdItems.push({ ...it, id: rowId });
+      createdItems.push({ ...it, id: rowId, code: upText(it.code), name: upText(it.name), reason: upText(it.reason) });
     }
     const created: Penyesuaian = { ...toModel<Penyesuaian>(res.data), items: createdItems };
     setState((s) => ({ ...s, penyesuaian: [created, ...s.penyesuaian] }));
@@ -1270,15 +1307,16 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const updateRoom = useCallback<ClinicStoreContextValue['updateRoom']>(async (room) => {
+    const normalized = { ...room, name: upText(room.name) };
     await api('PUT', `${STRAPI_ENDPOINTS.rooms}/${room.id}`, {
-      data: stripId(room),
+      data: stripId(normalized),
     });
-    setState((s) => ({ ...s, rooms: s.rooms.map((r) => (r.id === room.id ? room : r)) }));
+    setState((s) => ({ ...s, rooms: s.rooms.map((r) => (r.id === room.id ? normalized : r)) }));
   }, []);
 
   const addRoom = useCallback<ClinicStoreContextValue['addRoom']>(async (name) => {
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.rooms, {
-      data: { name, faskes: currentFaskesId() },
+      data: { name: upText(name), faskes: currentFaskesId() },
     });
     const created = toModel<Room>(res.data);
     setState((s) => ({ ...s, rooms: [...s.rooms, created] }));
@@ -1291,8 +1329,9 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const addStaff = useCallback<ClinicStoreContextValue['addStaff']>(async (st) => {
+    const normalized = { ...st, name: upText(st.name), room: upText(st.room), sip: st.sip ? upText(st.sip) : st.sip };
     const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.staff, {
-      data: { ...st, name: toUpperCase(st.name), faskes: currentFaskesId() },
+      data: { ...normalized, faskes: currentFaskesId() },
     });
     const created = toModel<Staff>(res.data);
     setState((s) => ({ ...s, staff: [...s.staff, created] }));
@@ -1311,6 +1350,123 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       }));
     },
     [state.staff],
+  );
+
+  const addService = useCallback<ClinicStoreContextValue['addService']>(async (s) => {
+    const normalized = { ...s, code: upText(s.code), name: upText(s.name), room: upText(s.room) };
+    const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.services, {
+      data: { ...normalized, faskes: currentFaskesId() },
+    });
+    const created = toModel<Service>(res.data);
+    setState((prev) => ({ ...prev, services: [...prev.services, created] }));
+    return created;
+  }, []);
+
+  const updateService = useCallback<ClinicStoreContextValue['updateService']>(async (s) => {
+    const normalized = { ...s, code: upText(s.code), name: upText(s.name), room: upText(s.room) };
+    await api('PUT', `${STRAPI_ENDPOINTS.services}/${s.id}`, {
+      data: stripId(normalized),
+    });
+    setState((prev) => ({ ...prev, services: prev.services.map((x) => (x.id === s.id ? normalized : x)) }));
+  }, []);
+
+  const removeService = useCallback<ClinicStoreContextValue['removeService']>(async (id) => {
+    await api('DELETE', `${STRAPI_ENDPOINTS.services}/${id}`);
+    setState((s) => ({ ...s, services: s.services.filter((x) => x.id !== id) }));
+  }, []);
+
+  const addPackage = useCallback<ClinicStoreContextValue['addPackage']>(async (p) => {
+    const normalized = { ...p, name: upText(p.name), patientName: p.patientName ? upText(p.patientName) : p.patientName };
+    const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.servicePackages, {
+      data: { ...normalized, faskes: currentFaskesId() },
+    });
+    const created = toModel<ServicePackage>(res.data);
+    setState((prev) => ({ ...prev, packages: [...prev.packages, created] }));
+    return created;
+  }, []);
+
+  const updatePackage = useCallback<ClinicStoreContextValue['updatePackage']>(async (p) => {
+    const normalized = { ...p, name: upText(p.name), patientName: p.patientName ? upText(p.patientName) : p.patientName };
+    await api('PUT', `${STRAPI_ENDPOINTS.servicePackages}/${p.id}`, {
+      data: stripId(normalized),
+    });
+    setState((prev) => ({ ...prev, packages: prev.packages.map((x) => (x.id === p.id ? normalized : x)) }));
+  }, []);
+
+  const removePackage = useCallback<ClinicStoreContextValue['removePackage']>(async (id) => {
+    await api('DELETE', `${STRAPI_ENDPOINTS.servicePackages}/${id}`);
+    setState((s) => ({ ...s, packages: s.packages.filter((x) => x.id !== id) }));
+  }, []);
+
+  const addDiscount = useCallback<ClinicStoreContextValue['addDiscount']>(async (d) => {
+    const normalized = { ...d, name: upText(d.name), appliesTo: upText(d.appliesTo) };
+    const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.serviceDiscounts, {
+      data: { ...normalized, faskes: currentFaskesId() },
+    });
+    const created = toModel<ServiceDiscount>(res.data);
+    setState((prev) => ({ ...prev, discounts: [...prev.discounts, created] }));
+    return created;
+  }, []);
+
+  const updateDiscount = useCallback<ClinicStoreContextValue['updateDiscount']>(async (d) => {
+    const normalized = { ...d, name: upText(d.name), appliesTo: upText(d.appliesTo) };
+    await api('PUT', `${STRAPI_ENDPOINTS.serviceDiscounts}/${d.id}`, {
+      data: stripId(normalized),
+    });
+    setState((prev) => ({ ...prev, discounts: prev.discounts.map((x) => (x.id === d.id ? normalized : x)) }));
+  }, []);
+
+  const toggleDiscountActive = useCallback<ClinicStoreContextValue['toggleDiscountActive']>(
+    async (id) => {
+      const dc = state.discounts.find((x) => x.id === id);
+      await api('PUT', `${STRAPI_ENDPOINTS.serviceDiscounts}/${id}`, {
+        data: { active: !(dc?.active ?? true) },
+      });
+      setState((s) => ({
+        ...s,
+        discounts: s.discounts.map((x) => (x.id === id ? { ...x, active: !x.active } : x)),
+      }));
+    },
+    [state.discounts],
+  );
+
+  const removeDiscount = useCallback<ClinicStoreContextValue['removeDiscount']>(async (id) => {
+    await api('DELETE', `${STRAPI_ENDPOINTS.serviceDiscounts}/${id}`);
+    setState((s) => ({ ...s, discounts: s.discounts.filter((x) => x.id !== id) }));
+  }, []);
+
+  const addSchedule = useCallback<ClinicStoreContextValue['addSchedule']>(async (s) => {
+    const normalized = { ...s, staffName: upText(s.staffName), day: upText(s.day), room: upText(s.room) };
+    const res = await api<{ data: StrapiEntity }>('POST', STRAPI_ENDPOINTS.staffSchedules, {
+      data: { ...normalized, faskes: currentFaskesId() },
+    });
+    const created = toModel<StaffSchedule>(res.data);
+    setState((prev) => ({ ...prev, schedules: [...prev.schedules, created] }));
+    return created;
+  }, []);
+
+  const updateSchedule = useCallback<ClinicStoreContextValue['updateSchedule']>(async (s) => {
+    const normalized = { ...s, staffName: upText(s.staffName), day: upText(s.day), room: upText(s.room) };
+    await api('PUT', `${STRAPI_ENDPOINTS.staffSchedules}/${s.id}`, {
+      data: stripId(normalized),
+    });
+    setState((prev) => ({ ...prev, schedules: prev.schedules.map((x) => (x.id === s.id ? normalized : x)) }));
+  }, []);
+
+  const removeSchedule = useCallback<ClinicStoreContextValue['removeSchedule']>(async (id) => {
+    await api('DELETE', `${STRAPI_ENDPOINTS.staffSchedules}/${id}`);
+    setState((s) => ({ ...s, schedules: s.schedules.filter((x) => x.id !== id) }));
+  }, []);
+
+  const updateFaskesProfile = useCallback<ClinicStoreContextValue['updateFaskesProfile']>(
+    async (docId, patch) => {
+      const normalized: { name?: string; address?: string; phone?: string } = {};
+      if (patch.name !== undefined) normalized.name = upText(patch.name);
+      if (patch.address !== undefined) normalized.address = upText(patch.address);
+      if (patch.phone !== undefined) normalized.phone = patch.phone.trim();
+      await api('PUT', `${STRAPI_ENDPOINTS.faskesList}/${docId}`, { data: normalized });
+    },
+    [],
   );
 
   const resetAll = useCallback(async () => {
@@ -1343,13 +1499,32 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       removeRoom,
       addStaff,
       toggleStaffActive,
+      addService,
+      updateService,
+      removeService,
+      addPackage,
+      updatePackage,
+      removePackage,
+      addDiscount,
+      updateDiscount,
+      toggleDiscountActive,
+      removeDiscount,
+      addSchedule,
+      updateSchedule,
+      removeSchedule,
+      updateFaskesProfile,
       resetAll,
     }),
     [
       state, loading, refresh, ensureModule, addRegistration, addPatient, updatePatient, syncPatientName, getOrCreateEmr, updateEmr,
       addInvoice, payInvoice, addApotekInvoice, addBooking, updateBookingStatus,
       addLetter, addReferral, updateMedicineStock, addPenyesuaian, updateRoom, addRoom,
-      removeRoom, addStaff, toggleStaffActive, resetAll,
+      removeRoom, addStaff, toggleStaffActive,
+      addService, updateService, removeService,
+      addPackage, updatePackage, removePackage,
+      addDiscount, updateDiscount, toggleDiscountActive, removeDiscount,
+      addSchedule, updateSchedule, removeSchedule, updateFaskesProfile,
+      resetAll,
     ],
   );
 

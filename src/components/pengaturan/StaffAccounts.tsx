@@ -41,7 +41,7 @@ export function StaffAccounts() {
       return;
     }
     const result = await invite({
-      data: { name: form.name.trim(), email: form.email.trim(), password: form.password, appRole: appRoleValue },
+      data: { name: form.name.trim().toUpperCase(), email: form.email.trim(), password: form.password, appRole: appRoleValue },
     });
     if (result?.error) {
       setError(result.error.message ?? 'Gagal mengundang staf.');

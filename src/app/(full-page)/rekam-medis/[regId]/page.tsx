@@ -8,6 +8,7 @@ import { Topbar } from '@/components/layout/Topbar';
 import { useShell } from '@/components/layout/AppShell';
 import { Odontogram } from '@/components/rme/Odontogram';
 import { IcdCombobox } from '@/components/rme/IcdCombobox';
+import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EditPatientModal } from '@/components/pasien/EditPatientModal';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
@@ -233,6 +234,48 @@ export default function EmrDetailPage() {
   const [deletingFotoId, setDeletingFotoId] = useState<number | null>(null);
   // Konfirmasi hapus: id foto yang menunggu persetujuan user (null = tidak ada).
   const [confirmHapusId, setConfirmHapusId] = useState<number | null>(null);
+  // Dialog konfirmasi bersama untuk SEMUA aksi hapus selain foto.
+  const { confirm: confirmHapus, dialog: dialogHapus } = useConfirmDialog();
+
+  /** Hapus 1 baris draft (kondisi/diagnosa/tindakan/alkes) — selalu konfirmasi dulu. */
+  const hapusDraftItem = async (
+    kind: 'kondisi' | 'diagnosa' | 'tindakan' | 'alkes',
+    id: string,
+    desc: string,
+  ) => {
+    const ok = await confirmHapus({ title: `Hapus ${kind}?`, message: `${desc} akan dihapus dari daftar.` });
+    if (!ok) return;
+    if (kind === 'kondisi') setDraft({ ...draft, kondisi: draft.kondisi.filter((x) => x.id !== id) });
+    else if (kind === 'diagnosa') setDraft({ ...draft, diagnosa: draft.diagnosa.filter((x) => x.id !== id) });
+    else if (kind === 'tindakan') setDraft({ ...draft, tindakan: draft.tindakan.filter((x) => x.id !== id) });
+    else setDraft({ ...draft, alkes: draft.alkes.filter((x) => x.id !== id) });
+  };
+
+  /** Hapus 1 lembar resep beserta isinya — selalu konfirmasi dulu. */
+  const hapusResep = async (isApotek: boolean, ri: number) => {
+    const ok = await confirmHapus({ title: `Hapus Resep ${ri + 1}?`, message: `Seluruh isi Resep ${ri + 1} akan dihapus dari daftar.` });
+    if (!ok) return;
+    setDraft({
+      ...draft,
+      resepApotek: isApotek ? draft.resepApotek.filter((_, i) => i !== ri) : draft.resepApotek,
+      resepRujukan: !isApotek ? draft.resepRujukan.filter((_, i) => i !== ri) : draft.resepRujukan,
+    });
+  };
+
+  /** Hapus 1 item obat dari resep — selalu konfirmasi dulu. */
+  const hapusResepItem = async (isApotek: boolean, ri: number, id: string, name: string) => {
+    const ok = await confirmHapus({ title: 'Hapus obat dari resep?', message: `${name} akan dihapus dari Resep ${ri + 1}.` });
+    if (!ok) return;
+    setDraft({
+      ...draft,
+      resepApotek: isApotek
+        ? draft.resepApotek.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== id) } : r2))
+        : draft.resepApotek,
+      resepRujukan: !isApotek
+        ? draft.resepRujukan.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== id) } : r2))
+        : draft.resepRujukan,
+    });
+  };
   useEffect(() => {
     if (confirmHapusId === null || deletingFotoId !== null) return;
     const onKey = (e: KeyboardEvent) => {
@@ -890,7 +933,7 @@ export default function EmrDetailPage() {
                       </span>
                       <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">{k.deskripsi || '-'}</span>
                       <button
-                        onClick={() => setDraft({ ...draft, kondisi: draft.kondisi.filter((x) => x.id !== k.id) })}
+                        onClick={() => hapusDraftItem('kondisi', k.id, `Gigi ${k.toothNumber ?? '-'} — ${k.deskripsi || 'tanpa deskripsi'}`)}
                         aria-label="Hapus kondisi"
                         className="text-rose-500 hover:text-rose-700 shrink-0"
                       >
@@ -918,7 +961,7 @@ export default function EmrDetailPage() {
                         <td className="px-4 py-2.5 text-slate-700">{k.deskripsi}</td>
                         <td className="px-4 py-2.5 text-right">
                           <button
-                            onClick={() => setDraft({ ...draft, kondisi: draft.kondisi.filter((x) => x.id !== k.id) })}
+                            onClick={() => hapusDraftItem('kondisi', k.id, `Gigi ${k.toothNumber ?? '-'} — ${k.deskripsi || 'tanpa deskripsi'}`)}
                             className="text-rose-500 hover:text-rose-700"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -996,7 +1039,7 @@ export default function EmrDetailPage() {
                         <div className="text-sm text-slate-700 mt-1">{d.icd10Desc}</div>
                       </div>
                       <button
-                        onClick={() => setDraft({ ...draft, diagnosa: draft.diagnosa.filter((x) => x.id !== d.id) })}
+                        onClick={() => hapusDraftItem('diagnosa', d.id, `${d.icd10Code} — ${d.icd10Desc || 'tanpa deskripsi'}`)}
                         aria-label="Hapus diagnosa"
                         className="text-rose-500 hover:text-rose-700 shrink-0"
                       >
@@ -1023,7 +1066,7 @@ export default function EmrDetailPage() {
                         <td className="px-4 py-2.5 font-mono text-xs text-teal-700">{d.icd10Code}</td>
                         <td className="px-4 py-2.5 text-slate-700">{d.icd10Desc}</td>
                         <td className="px-4 py-2.5 text-right">
-                          <button onClick={() => setDraft({ ...draft, diagnosa: draft.diagnosa.filter((x) => x.id !== d.id) })} className="text-rose-500 hover:text-rose-700">
+                          <button onClick={() => hapusDraftItem('diagnosa', d.id, `${d.icd10Code} — ${d.icd10Desc || 'tanpa deskripsi'}`)} className="text-rose-500 hover:text-rose-700">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
@@ -1075,7 +1118,7 @@ export default function EmrDetailPage() {
                           <div className="text-[11px] font-mono text-slate-400">{t.code} · Gigi {t.tooth} · ×{t.qty}</div>
                         </div>
                         <button
-                          onClick={() => setDraft({ ...draft, tindakan: draft.tindakan.filter((x) => x.id !== t.id) })}
+                          onClick={() => hapusDraftItem('tindakan', t.id, `${t.name || t.code} (×${t.qty})`)}
                           aria-label="Hapus tindakan"
                           className="text-rose-500 hover:text-rose-700 shrink-0"
                         >
@@ -1127,7 +1170,7 @@ export default function EmrDetailPage() {
                         <td className="px-4 py-2.5 text-slate-600 text-xs">{fmtRupiah(t.discount)}</td>
                         <td className="px-4 py-2.5 font-semibold text-slate-800">{fmtRupiah(t.qty * t.price - t.discount)}</td>
                         <td className="px-4 py-2.5 text-right">
-                          <button onClick={() => setDraft({ ...draft, tindakan: draft.tindakan.filter((x) => x.id !== t.id) })} className="text-rose-500 hover:text-rose-700">
+                          <button onClick={() => hapusDraftItem('tindakan', t.id, `${t.name || t.code} (×${t.qty})`)} className="text-rose-500 hover:text-rose-700">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
@@ -1239,7 +1282,7 @@ export default function EmrDetailPage() {
                           <div className="text-[11px] font-mono text-slate-400">{a.code} · ×{a.qty}</div>
                         </div>
                         <button
-                          onClick={() => setDraft({ ...draft, alkes: draft.alkes.filter((x) => x.id !== a.id) })}
+                          onClick={() => hapusDraftItem('alkes', a.id, `${a.name || a.code} (×${a.qty})`)}
                           aria-label="Hapus alkes"
                           className="text-rose-500 hover:text-rose-700 shrink-0"
                         >
@@ -1277,7 +1320,7 @@ export default function EmrDetailPage() {
                         <td className="px-4 py-2.5 text-slate-600 text-xs">{fmtRupiah(a.price)}</td>
                         <td className="px-4 py-2.5 font-semibold text-slate-800">{fmtRupiah(a.qty * a.price)}</td>
                         <td className="px-4 py-2.5 text-right">
-                          <button onClick={() => setDraft({ ...draft, alkes: draft.alkes.filter((x) => x.id !== a.id) })} className="text-rose-500 hover:text-rose-700">
+                          <button onClick={() => hapusDraftItem('alkes', a.id, `${a.name || a.code} (×${a.qty})`)} className="text-rose-500 hover:text-rose-700">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
@@ -1288,8 +1331,8 @@ export default function EmrDetailPage() {
                     )}
                   </tbody>
                 </table></div>
-                <div className="flex flex-wrap gap-2 items-end border-t border-slate-100 pt-4">
-                  <div className="w-44">
+                <div className="grid grid-cols-[6rem_1fr] md:grid-cols-[1fr_6rem_auto] gap-2.5 md:gap-3 items-end border-t border-slate-100 pt-4">
+                  <div className="col-span-2 md:col-span-1 min-w-0">
                     <label className={labelCls}>Alkes (Master)</label>
                     <select
                       value={newAlkes.code}
@@ -1302,7 +1345,7 @@ export default function EmrDetailPage() {
                       {state.medicines.map((m) => <option key={m.id} value={m.code}>{m.code} — {m.name}</option>)}
                     </select>
                   </div>
-                  <div className="w-20">
+                  <div className="min-w-0">
                     <label className={labelCls}>Jml</label>
                     <input
                       value={newAlkes.qty}
@@ -1329,7 +1372,7 @@ export default function EmrDetailPage() {
                       }
                       setDraft({ ...draft, alkes: [...draft.alkes, { ...newAlkes, id: `al-${Date.now()}` }] });
                     }}
-                    className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-2.5 rounded-lg transition"
+                    className="inline-flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg transition whitespace-nowrap"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Pemakaian Alkes
                   </button>
@@ -1362,13 +1405,8 @@ export default function EmrDetailPage() {
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                         <h3 className="font-bold text-slate-800 text-sm">Resep {ri + 1}</h3>
                         <button
-                          onClick={() =>
-                            setDraft({
-                              ...draft,
-                              resepApotek: isApotek ? draft.resepApotek.filter((_, i) => i !== ri) : draft.resepApotek,
-                              resepRujukan: !isApotek ? draft.resepRujukan.filter((_, i) => i !== ri) : draft.resepRujukan,
-                            })
-                          }
+                          onClick={() => hapusResep(isApotek, ri)}
+                          aria-label={`Hapus Resep ${ri + 1}`}
                           className="text-rose-500 hover:text-rose-700"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1384,17 +1422,7 @@ export default function EmrDetailPage() {
                                 <div className="text-[11px] font-mono text-slate-400">{it.code} · ×{it.qty}</div>
                               </div>
                               <button
-                                onClick={() =>
-                                  setDraft({
-                                    ...draft,
-                                    resepApotek: isApotek
-                                      ? draft.resepApotek.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== it.id) } : r2))
-                                      : draft.resepApotek,
-                                    resepRujukan: !isApotek
-                                      ? draft.resepRujukan.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== it.id) } : r2))
-                                      : draft.resepRujukan,
-                                  })
-                                }
+                                onClick={() => hapusResepItem(isApotek, ri, it.id, it.name)}
                                 aria-label="Hapus item resep"
                                 className="text-rose-500 hover:text-rose-700 shrink-0"
                               >
@@ -1433,17 +1461,8 @@ export default function EmrDetailPage() {
                               <td className="px-4 py-2.5 font-semibold text-slate-800">{fmtRupiah(it.qty * it.price)}</td>
                               <td className="px-4 py-2.5 text-right">
                                 <button
-                                  onClick={() =>
-                                    setDraft({
-                                      ...draft,
-                                      resepApotek: isApotek
-                                        ? draft.resepApotek.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== it.id) } : r2))
-                                        : draft.resepApotek,
-                                      resepRujukan: !isApotek
-                                        ? draft.resepRujukan.map((r2, i2) => (i2 === ri ? { ...r2, items: r2.items.filter((x) => x.id !== it.id) } : r2))
-                                        : draft.resepRujukan,
-                                    })
-                                  }
+                                  onClick={() => hapusResepItem(isApotek, ri, it.id, it.name)}
+                                  aria-label="Hapus item resep"
                                   className="text-rose-500 hover:text-rose-700"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1496,6 +1515,7 @@ export default function EmrDetailPage() {
       </main>
 
       {/* Modal ubah data diri pasien (komponen bersama) */}
+      {dialogHapus}
       <EditPatientModal
         patient={editPatientOpen ? (patient ?? null) : null}
         onClose={() => setEditPatientOpen(false)}

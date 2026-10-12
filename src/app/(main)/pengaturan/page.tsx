@@ -1,11 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore } from '@/lib/ClinicStore';
 import { useOptionGroup } from '@/lib/useOptions';
 import { FaskesInfo } from '@/components/pengaturan/FaskesInfo';
 import { StaffAccounts } from '@/components/pengaturan/StaffAccounts';
+import { ServiceCrud } from '@/components/pengaturan/ServiceCrud';
+import { PackageCrud } from '@/components/pengaturan/PackageCrud';
+import { DiscountCrud } from '@/components/pengaturan/DiscountCrud';
+import { ScheduleCrud } from '@/components/pengaturan/ScheduleCrud';
+import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   Settings, Globe, Save, Check, Plus, Trash2, UserPlus, CalendarClock, Building2, Users, Stethoscope,
 } from 'lucide-react';
@@ -16,7 +21,7 @@ type ServiceTab = 'poli' | 'pelayanan' | 'paket' | 'diskon';
 type ExtTab = 'satusehat' | 'bpjs' | 'fonnte';
 
 export default function PengaturanPage() {
-  const { state, addRoom, removeRoom, addStaff, toggleStaffActive } = useClinicStore();
+  const { state, ensureModule, addRoom, removeRoom, addStaff, toggleStaffActive } = useClinicStore();
   const [mainTab, setMainTab] = useState<MainTab>('sistem');
   const [sysTab, setSysTab] = useState<SysTab>('pelayanan');
   const [svcTab, setSvcTab] = useState<ServiceTab>('poli');
@@ -24,9 +29,20 @@ export default function PengaturanPage() {
   const [saved, setSaved] = useState(false);
   const [newRoom, setNewRoom] = useState('');
   const [newStaff, setNewStaff] = useState({ name: '', role: '', room: 'Poli Gigi & Mulut' });
+  // Paket/diskon/jadwal dimuat on-demand (modul pengaturan).
+  useEffect(() => {
+    ensureModule('pengaturan');
+  }, [ensureModule]);
   // Peran pegawai — wajib dari API (ms-options), tidak boleh hardcode.
   const { items: staffRoles, isLoading: loadingStaffRoles } = useOptionGroup('staff-role');
   const staffRoleValue = newStaff.role || staffRoles[0]?.value || '';
+  const { confirm, dialog } = useConfirmDialog();
+
+  const removePoli = async (id: string, name: string) => {
+    const ok = await confirm({ title: 'Hapus poli?', message: `"${name}" akan dihapus dari master.` });
+    if (!ok) return;
+    removeRoom(id);
+  };
 
   // SATUSEHAT
   const [ssId, setSsId] = useState('11000030001');
@@ -128,7 +144,7 @@ export default function PengaturanPage() {
                               <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 align-middle">SATUSEHAT</span>
                             )}
                           </span>
-                          <button onClick={() => removeRoom(r.id)} aria-label="Hapus poli" className="text-rose-500 hover:text-rose-700 active:text-rose-800 p-1.5 shrink-0">
+                          <button onClick={() => removePoli(r.id, r.name)} aria-label="Hapus poli" className="text-rose-500 hover:text-rose-700 active:text-rose-800 p-1.5 shrink-0">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -151,7 +167,7 @@ export default function PengaturanPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <button onClick={() => removeRoom(r.id)} className="text-rose-500 hover:text-rose-700">
+                              <button onClick={() => removePoli(r.id, r.name)} aria-label="Hapus poli" className="text-rose-500 hover:text-rose-700">
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             </td>
@@ -162,158 +178,16 @@ export default function PengaturanPage() {
                   </div>
                 )}
 
-                {svcTab === 'pelayanan' && (
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="md:hidden divide-y divide-slate-100">
-                      {state.services.map((sv) => (
-                        <div key={sv.id} className="px-4 py-3.5 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-medium text-slate-800 truncate">{sv.name}</div>
-                            <span className="text-sm font-bold text-slate-800 shrink-0">Rp {sv.price.toLocaleString('id-ID')}</span>
-                          </div>
-                          <div className="text-[11px] text-slate-400 truncate">
-                            <span className="font-mono">{sv.code}</span> · {sv.room}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
-                          <th className="px-4 py-3 font-semibold">Kode</th>
-                          <th className="px-4 py-3 font-semibold">Nama Pelayanan</th>
-                          <th className="px-4 py-3 font-semibold">Poli</th>
-                          <th className="px-4 py-3 font-semibold text-right">Tarif</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {state.services.map((s) => (
-                          <tr key={s.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-mono text-xs text-slate-500">{s.code}</td>
-                            <td className="px-4 py-3 text-slate-700">{s.name}</td>
-                            <td className="px-4 py-3 text-xs text-slate-600">{s.room}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-800">Rp {s.price.toLocaleString('id-ID')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table></div>
-                  </div>
-                )}
+                {svcTab === 'pelayanan' && <ServiceCrud />}
 
-                {svcTab === 'paket' && (
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="md:hidden divide-y divide-slate-100">
-                      {state.packages.map((pk) => (
-                        <div key={pk.id} className="px-4 py-3.5 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-medium text-slate-800 truncate">{pk.name}</div>
-                            <span className="text-sm font-bold text-slate-800 shrink-0">Rp {pk.price.toLocaleString('id-ID')}</span>
-                          </div>
-                          <div className="text-[11px] text-slate-400 truncate">{pk.patientName} · Sesi {pk.usedSessions}/{pk.totalSessions}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
-                          <th className="px-4 py-3 font-semibold">Paket</th>
-                          <th className="px-4 py-3 font-semibold">Pasien</th>
-                          <th className="px-4 py-3 font-semibold">Sesi</th>
-                          <th className="px-4 py-3 font-semibold text-right">Harga</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {state.packages.map((p) => (
-                          <tr key={p.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-medium text-slate-800">{p.name}</td>
-                            <td className="px-4 py-3 text-xs text-slate-600">{p.patientName}</td>
-                            <td className="px-4 py-3 text-xs text-slate-600">{p.usedSessions}/{p.totalSessions}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-800">Rp {p.price.toLocaleString('id-ID')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table></div>
-                  </div>
-                )}
+                {svcTab === 'paket' && <PackageCrud />}
 
-                {svcTab === 'diskon' && (
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="md:hidden divide-y divide-slate-100">
-                      {state.discounts.map((dc) => (
-                        <div key={dc.id} className="px-4 py-3.5 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-medium text-slate-800 truncate">{dc.name}</div>
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${dc.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                              {dc.active ? 'Aktif' : 'Nonaktif'}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-400 truncate">{dc.appliesTo} · {dc.percent}%</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
-                          <th className="px-4 py-3 font-semibold">Nama Diskon</th>
-                          <th className="px-4 py-3 font-semibold">Berlaku Untuk</th>
-                          <th className="px-4 py-3 font-semibold">Persen</th>
-                          <th className="px-4 py-3 font-semibold">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {state.discounts.map((d) => (
-                          <tr key={d.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-medium text-slate-800">{d.name}</td>
-                            <td className="px-4 py-3 text-xs text-slate-600">{d.appliesTo}</td>
-                            <td className="px-4 py-3 text-slate-700">{d.percent}%</td>
-                            <td className="px-4 py-3">
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${d.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                {d.active ? 'Aktif' : 'Nonaktif'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table></div>
-                  </div>
-                )}
+                {svcTab === 'diskon' && <DiscountCrud />}
               </div>
             )}
 
             {/* Jadwal */}
-            {sysTab === 'jadwal' && (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="md:hidden divide-y divide-slate-100">
-                  {state.schedules.map((sc) => (
-                    <div key={sc.id} className="px-4 py-3.5 space-y-1">
-                      <div className="text-sm font-medium text-slate-800 truncate">{sc.staffName}</div>
-                      <div className="text-[11px] text-slate-400 truncate">{sc.day} · {sc.startTime} – {sc.endTime}</div>
-                      <div className="text-[11px] text-slate-500 truncate">{sc.room}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="hidden md:block overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
-                      <th className="px-4 py-3 font-semibold">Pegawai</th>
-                      <th className="px-4 py-3 font-semibold">Hari</th>
-                      <th className="px-4 py-3 font-semibold">Jam</th>
-                      <th className="px-4 py-3 font-semibold">Poli</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {state.schedules.map((s) => (
-                      <tr key={s.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 font-medium text-slate-800">{s.staffName}</td>
-                        <td className="px-4 py-3 text-xs text-slate-600">{s.day}</td>
-                        <td className="px-4 py-3 text-xs text-slate-600">{s.startTime} – {s.endTime}</td>
-                        <td className="px-4 py-3 text-xs text-slate-600">{s.room}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
-              </div>
-            )}
+            {sysTab === 'jadwal' && <ScheduleCrud />}
 
             {/* Pegawai */}
             {sysTab === 'pegawai' && (
@@ -509,6 +383,7 @@ export default function PengaturanPage() {
             )}
           </div>
         )}
+        {dialog}
       </main>
     </>
   );

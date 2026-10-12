@@ -9,16 +9,16 @@ interface OdontogramProps {
   readOnly?: boolean;
 }
 
-const CONDITIONS: { label: string; value: ToothCondition; color: string; desc: string }[] = [
-  { label: 'Sehat (Normal)', value: 'healthy', color: '#10B981', desc: 'Gigi sehat normal' },
-  { label: 'Karies (Caries)', value: 'caries', color: '#EF4444', desc: 'Gigi berlubang' },
-  { label: 'Tambalan Komposit', value: 'filling_composite', color: '#3B82F6', desc: 'Restorasi resin' },
-  { label: 'Tambalan Amalgam', value: 'filling_amalgam', color: '#64748B', desc: 'Restorasi amalgam' },
-  { label: 'Crown / Mahkota', value: 'crown', color: '#F59E0B', desc: 'Mahkota tiruan' },
-  { label: 'Gigi Hilang (Missing)', value: 'missing', color: '#1E293B', desc: 'Gigi tanggal/dicabut' },
-  { label: 'Impaksi (Impacted)', value: 'impacted', color: '#8B5CF6', desc: 'Gigi tertanam' },
-  { label: 'Sisa Akar (Radix)', value: 'radix', color: '#DC2626', desc: 'Akar tertinggal' },
-  { label: 'Perawatan Saluran Akar', value: 'rct', color: '#EC4899', desc: 'Endodontik/PSA' },
+const CONDITIONS: { label: string; short: string; value: ToothCondition; color: string; desc: string }[] = [
+  { label: 'Sehat (Normal)', short: 'Sehat', value: 'healthy', color: '#10B981', desc: 'Gigi sehat normal' },
+  { label: 'Karies (Caries)', short: 'Karies', value: 'caries', color: '#EF4444', desc: 'Gigi berlubang' },
+  { label: 'Tambalan Komposit', short: 'Komposit', value: 'filling_composite', color: '#3B82F6', desc: 'Restorasi resin' },
+  { label: 'Tambalan Amalgam', short: 'Amalgam', value: 'filling_amalgam', color: '#64748B', desc: 'Restorasi amalgam' },
+  { label: 'Crown / Mahkota', short: 'Crown', value: 'crown', color: '#F59E0B', desc: 'Mahkota tiruan' },
+  { label: 'Gigi Hilang (Missing)', short: 'Hilang', value: 'missing', color: '#1E293B', desc: 'Gigi tanggal/dicabut' },
+  { label: 'Impaksi (Impacted)', short: 'Impaksi', value: 'impacted', color: '#8B5CF6', desc: 'Gigi tertanam' },
+  { label: 'Sisa Akar (Radix)', short: 'Radix', value: 'radix', color: '#DC2626', desc: 'Akar tertinggal' },
+  { label: 'Perawatan Saluran Akar', short: 'PSA', value: 'rct', color: '#EC4899', desc: 'Endodontik/PSA' },
 ];
 
 export const Odontogram: React.FC<OdontogramProps> = ({ value, onChange, readOnly = false }) => {
@@ -255,26 +255,47 @@ export const Odontogram: React.FC<OdontogramProps> = ({ value, onChange, readOnl
       </div>
 
       {/* Palette tool for clicking */}
-      {!readOnly && (
-        <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs">
-          <span className="font-semibold text-slate-700">Kuas Aktif:</span>
-          {CONDITIONS.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => setSelectedCondition(c.value)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition ${
-                selectedCondition === c.value
-                  ? 'bg-teal-600 text-white shadow-sm ring-2 ring-teal-300'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {!readOnly && (() => {
+        const active = CONDITIONS.find((c) => c.value === selectedCondition) ?? CONDITIONS[0];
+        return (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 space-y-2">
+            <div className="flex items-center gap-2.5 rounded-lg bg-white border border-slate-200 px-3 py-2">
+              <span className="text-xs font-semibold text-slate-500 shrink-0">Kuas Aktif</span>
+              <span
+                className="w-6 h-6 rounded-md shadow-inner shrink-0 ring-1 ring-black/10"
+                style={{ backgroundColor: active.color }}
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-slate-800 truncate">{active.label}</div>
+                <div className="text-[11px] text-slate-500 truncate">{active.desc}</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {CONDITIONS.map((c) => {
+                const isActive = c.value === selectedCondition;
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    title={`${c.label} — ${c.desc}`}
+                    onClick={() => setSelectedCondition(c.value)}
+                    aria-pressed={isActive}
+                    style={isActive ? { borderColor: c.color, backgroundColor: `${c.color}1A` } : undefined}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
+                      isActive
+                        ? 'text-slate-800 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                    {c.short}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Chart Layout */}
       <div className="space-y-4 overflow-x-auto py-2">
@@ -365,8 +386,8 @@ export const Odontogram: React.FC<OdontogramProps> = ({ value, onChange, readOnl
 
       {/* Detail Inspector on Selected Tooth */}
       {activeTooth && activeToothState && (
-        <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
-          <div className="space-y-1">
+        <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg flex flex-row items-center justify-between gap-3 text-xs overflow-x-auto">
+          <div className="space-y-1 shrink-0">
             <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
               <span>Gigi #{activeTooth}</span>
               <span className="font-normal text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
@@ -384,32 +405,32 @@ export const Odontogram: React.FC<OdontogramProps> = ({ value, onChange, readOnl
           </div>
 
           {!readOnly && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <input
                 type="text"
                 placeholder="Catatan khusus gigi..."
                 value={activeToothState.notes || ''}
                 onChange={(e) => handleNoteChange(activeTooth, e.target.value)}
-                className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs w-48 text-slate-800"
+                className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs w-48 shrink-0 text-slate-800"
               />
               <button
                 type="button"
                 onClick={() => handleWholeToothSet(activeTooth, 'missing')}
-                className="px-2 py-1 bg-slate-800 text-white rounded hover:bg-slate-900"
+                className="px-2 py-1 bg-slate-800 text-white rounded hover:bg-slate-900 shrink-0"
               >
                 Tandai Hilang
               </button>
               <button
                 type="button"
                 onClick={() => handleWholeToothSet(activeTooth, 'rct')}
-                className="px-2 py-1 bg-rose-600 text-white rounded hover:bg-rose-700"
+                className="px-2 py-1 bg-rose-600 text-white rounded hover:bg-rose-700 shrink-0"
               >
                 Tandai PSA/RCT
               </button>
               <button
                 type="button"
                 onClick={() => handleWholeToothSet(activeTooth, 'healthy')}
-                className="px-2 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                className="px-2 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 shrink-0"
               >
                 Reset Normal
               </button>
