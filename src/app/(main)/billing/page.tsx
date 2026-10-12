@@ -6,7 +6,7 @@ import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
 import { useOptionGroup } from '@/lib/useOptions';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
-import type { Invoice } from '@/types/clinic';
+import type { Invoice, ApotekInvoice, InsuranceClaim } from '@/types/clinic';
 import {
   Search, Receipt, Pill, ShieldCheck, Plus, Printer, Banknote, QrCode, CreditCard, Wallet,
   ChevronLeft, ChevronRight, ChevronDown,
@@ -136,6 +136,61 @@ function RincianBayar({ inv }: { inv: Invoice }) {
         <span>Status: <b className={inv.paymentStatus === 'Lunas' ? 'text-emerald-600' : 'text-rose-600'}>{inv.paymentStatus}</b></span>
         {inv.paymentMethod && <span>Metode: <b className="text-slate-700">{inv.paymentMethod}</b></span>}
         {inv.paidAt && <span>Tgl. Bayar: <b className="text-slate-700">{fmtDate(inv.paidAt)}</b></span>}
+      </div>
+    </div>
+  );
+}
+
+/** Isi rincian satu tagihan apotek — item per item + total. */
+function RincianApotek({ inv }: { inv: ApotekInvoice }) {
+  return (
+    <div className="bg-slate-50/70 border-t border-dashed border-slate-200 px-4 py-3 text-sm space-y-1">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">Rincian Obat</p>
+      {inv.items.map((i) => (
+        <div key={i.id} className="flex justify-between gap-3">
+          <span className="text-slate-500 truncate">{i.name} <span className="text-slate-400">×{i.qty}</span></span>
+          <span className="text-slate-800 font-medium shrink-0">{fmtRupiah(i.qty * i.price)}</span>
+        </div>
+      ))}
+      {inv.items.length === 0 && (
+        <p className="text-xs text-slate-400">Tidak ada item.</p>
+      )}
+      <div className="flex justify-between gap-3 border-t border-slate-200 pt-1.5">
+        <span className="font-semibold text-slate-700">Total Bayar</span>
+        <span className="font-bold text-emerald-600">{fmtRupiah(inv.total)}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 pt-1 text-[11px] text-slate-500">
+        <span>Jenis: <b className="text-slate-700">{inv.type}</b></span>
+        <span>Status: <b className={inv.paymentStatus === 'Lunas' ? 'text-emerald-600' : 'text-rose-600'}>{inv.paymentStatus}</b></span>
+        <span>Tanggal: <b className="text-slate-700">{fmtDate(inv.date)}</b></span>
+      </div>
+    </div>
+  );
+}
+
+/** Isi rincian satu klaim asuransi. */
+function RincianKlaim({ claim }: { claim: InsuranceClaim }) {
+  return (
+    <div className="bg-slate-50/70 border-t border-dashed border-slate-200 px-4 py-3 text-sm space-y-1">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">Rincian Klaim</p>
+      <div className="flex justify-between gap-3">
+        <span className="text-slate-500">Pasien</span>
+        <span className="text-slate-800 font-medium text-right">{claim.patientName}</span>
+      </div>
+      <div className="flex justify-between gap-3">
+        <span className="text-slate-500">Penjamin</span>
+        <span className="text-slate-800 font-medium text-right">{claim.penjamin}</span>
+      </div>
+      <div className="flex justify-between gap-3">
+        <span className="text-slate-500">Tanggal</span>
+        <span className="text-slate-800 font-medium">{fmtDate(claim.date)}</span>
+      </div>
+      <div className="flex justify-between gap-3 border-t border-slate-200 pt-1.5">
+        <span className="font-semibold text-slate-700">Nilai Klaim</span>
+        <span className="font-bold text-emerald-600">{fmtRupiah(claim.amount)}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 pt-1 text-[11px] text-slate-500">
+        <span>Status: <b className={claim.status === 'Dibayar' ? 'text-emerald-600' : claim.status === 'Ditolak' ? 'text-rose-600' : 'text-amber-600'}>{claim.status}</b></span>
       </div>
     </div>
   );
@@ -443,14 +498,25 @@ export default function TagihanPage() {
                 <Plus className="w-3.5 h-3.5" /> Obat Resep
               </button>
             </div>
-            {/* Mobile: kartu apotek */}
+            {/* Mobile: kartu apotek — klik kartu untuk rincian */}
             <div className="md:hidden divide-y divide-slate-100">
-              {pagedApotek.items.map((a) => (
-                <div key={a.id} className="px-4 py-3.5 space-y-1">
+              {pagedApotek.items.map((a) => {
+                const open = expandedId === a.id;
+                return (
+                <div key={a.id}>
+                <div
+                  onClick={() => setExpandedId(open ? null : a.id)}
+                  aria-expanded={open}
+                  title="Klik untuk rincian obat"
+                  className={`px-4 py-3.5 space-y-1 cursor-pointer transition ${open ? 'bg-teal-50/50' : 'hover:bg-slate-50'}`}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium text-slate-800 truncate">{a.patientName}</div>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${a.paymentStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {a.paymentStatus}
+                    <span className="inline-flex items-center gap-1.5 shrink-0">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${a.paymentStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {a.paymentStatus}
+                      </span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-400 truncate">
@@ -461,7 +527,10 @@ export default function TagihanPage() {
                     <span className="font-bold text-slate-800 text-sm shrink-0">{fmtRupiah(a.total)}</span>
                   </div>
                 </div>
-              ))}
+                {open && <RincianApotek inv={a} />}
+                </div>
+                );
+              })}
               {state.apotekInvoices.length === 0 && (
                 <p className="px-4 py-10 text-center text-xs text-slate-400">Belum ada tagihan apotek.</p>
               )}
@@ -479,8 +548,16 @@ export default function TagihanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {pagedApotek.items.map((a) => (
-                  <tr key={a.id} className="hover:bg-slate-50 transition">
+                {pagedApotek.items.map((a) => {
+                  const open = expandedId === a.id;
+                  return (
+                  <Fragment key={a.id}>
+                  <tr
+                    onClick={() => setExpandedId(open ? null : a.id)}
+                    aria-expanded={open}
+                    title="Klik untuk rincian obat"
+                    className={`cursor-pointer transition ${open ? 'bg-teal-50/50 hover:bg-teal-50' : 'hover:bg-slate-50'}`}
+                  >
                     <td className="px-4 py-3 text-xs text-slate-600">{fmtDate(a.date)}</td>
                     <td className="px-4 py-3">
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">{a.type}</span>
@@ -489,12 +566,24 @@ export default function TagihanPage() {
                     <td className="px-4 py-3 text-xs text-slate-500">{a.items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</td>
                     <td className="px-4 py-3 text-right font-bold text-slate-800">{fmtRupiah(a.total)}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.paymentStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {a.paymentStatus}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.paymentStatus === 'Lunas' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {a.paymentStatus}
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                       </span>
                     </td>
                   </tr>
-                ))}
+                  {open && (
+                    <tr className="bg-slate-50/50">
+                      <td colSpan={6} className="px-4 py-0">
+                        <RincianApotek inv={a} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })}
                 {state.apotekInvoices.length === 0 && (
                   <tr><td colSpan={7} className="px-4 py-10 text-center text-xs text-slate-400">Belum ada tagihan apotek.</td></tr>
                 )}
@@ -510,19 +599,30 @@ export default function TagihanPage() {
             <div className="px-4 md:px-5 py-4 border-b border-slate-100">
               <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Daftar Klaim Pasien</h2>
             </div>
-            {/* Mobile: kartu klaim */}
+            {/* Mobile: kartu klaim — klik kartu untuk rincian */}
             <div className="md:hidden divide-y divide-slate-100">
-              {pagedKlaim.items.map((c) => (
-                <div key={c.id} className="px-4 py-3.5 space-y-1">
+              {pagedKlaim.items.map((c) => {
+                const open = expandedId === c.id;
+                return (
+                <div key={c.id}>
+                <div
+                  onClick={() => setExpandedId(open ? null : c.id)}
+                  aria-expanded={open}
+                  title="Klik untuk rincian klaim"
+                  className={`px-4 py-3.5 space-y-1 cursor-pointer transition ${open ? 'bg-teal-50/50' : 'hover:bg-slate-50'}`}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium text-slate-800 truncate">{c.patientName}</div>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-                      c.status === 'Dibayar' ? 'bg-emerald-100 text-emerald-700'
-                      : c.status === 'Diproses' ? 'bg-blue-100 text-blue-700'
-                      : c.status === 'Ditolak' ? 'bg-rose-100 text-rose-700'
-                      : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {c.status}
+                    <span className="inline-flex items-center gap-1.5 shrink-0">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        c.status === 'Dibayar' ? 'bg-emerald-100 text-emerald-700'
+                        : c.status === 'Diproses' ? 'bg-blue-100 text-blue-700'
+                        : c.status === 'Ditolak' ? 'bg-rose-100 text-rose-700'
+                        : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {c.status}
+                      </span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-400 truncate">{c.penjamin} · {fmtDate(c.date)}</div>
@@ -531,7 +631,10 @@ export default function TagihanPage() {
                     <span className="font-bold text-slate-800">{fmtRupiah(c.amount)}</span>
                   </div>
                 </div>
-              ))}
+                {open && <RincianKlaim claim={c} />}
+                </div>
+                );
+              })}
               {claimList.length === 0 && (
                 <p className="px-4 py-10 text-center text-xs text-slate-400">
                   Daftar Klaim Pasien Belum Tersedia — tagihan pasien akan muncul setelah data Rekam Medis dilengkapi.
@@ -550,8 +653,16 @@ export default function TagihanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {pagedKlaim.items.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50 transition">
+                {pagedKlaim.items.map((c) => {
+                  const open = expandedId === c.id;
+                  return (
+                  <Fragment key={c.id}>
+                  <tr
+                    onClick={() => setExpandedId(open ? null : c.id)}
+                    aria-expanded={open}
+                    title="Klik untuk rincian klaim"
+                    className={`cursor-pointer transition ${open ? 'bg-teal-50/50 hover:bg-teal-50' : 'hover:bg-slate-50'}`}
+                  >
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-800">{c.patientName}</div>
                     </td>
@@ -559,17 +670,29 @@ export default function TagihanPage() {
                     <td className="px-4 py-3 text-xs text-slate-600">{fmtDate(c.date)}</td>
                     <td className="px-4 py-3 text-right font-bold text-slate-800">{fmtRupiah(c.amount)}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        c.status === 'Dibayar' ? 'bg-emerald-100 text-emerald-700'
-                        : c.status === 'Diproses' ? 'bg-blue-100 text-blue-700'
-                        : c.status === 'Ditolak' ? 'bg-rose-100 text-rose-700'
-                        : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {c.status}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          c.status === 'Dibayar' ? 'bg-emerald-100 text-emerald-700'
+                          : c.status === 'Diproses' ? 'bg-blue-100 text-blue-700'
+                          : c.status === 'Ditolak' ? 'bg-rose-100 text-rose-700'
+                          : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {c.status}
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                       </span>
                     </td>
                   </tr>
-                ))}
+                  {open && (
+                    <tr className="bg-slate-50/50">
+                      <td colSpan={5} className="px-4 py-0">
+                        <RincianKlaim claim={c} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })}
                 {claimList.length === 0 && (
                   <tr><td colSpan={5} className="px-4 py-10 text-center text-xs text-slate-400">
                     Daftar Klaim Pasien Belum Tersedia — tagihan pasien akan muncul setelah data Rekam Medis dilengkapi.

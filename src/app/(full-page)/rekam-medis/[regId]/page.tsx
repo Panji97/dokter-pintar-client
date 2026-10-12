@@ -10,6 +10,7 @@ import { Odontogram } from '@/components/rme/Odontogram';
 import { EditPatientModal } from '@/components/pasien/EditPatientModal';
 import { useClinicStore, fmtRupiah, fmtDate, fmtDateTime } from '@/lib/ClinicStore';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
+import { uploadMedia, deleteMedia, resolveMediaUrl } from '@/lib/strapi';
 import { useIcdList, filterIcd } from '@/lib/useIcd';
 import {
   VITAL_RULES, vitalRuleOf, sanitizeNumeric, sanitizeInt,
@@ -17,16 +18,16 @@ import {
   TEXT_LIMITS,
 } from '@/lib/emr-validation';
 import {
-  EmrDocument, DiagnosaItem, TindakanItem, AlkesItem, KondisiGigi,
+  EmrDocument, EmrPhoto, DiagnosaItem, TindakanItem, AlkesItem, KondisiGigi,
 } from '@/types/clinic';
 import {
-  Plus, Trash2, FileText, Upload, FileCheck, FileSignature, ShieldCheck, ClipboardCheck,
+  Plus, Trash2, FileText, Upload, FileCheck, Loader2,
   History, Pencil,
 } from 'lucide-react';
 
 type MainTab = 'riwayat' | 'so' | 'ap' | 'p';
 type SoTab = 'anamnesa-umum' | 'anamnesa-odonto' | 'pemeriksaan' | 'foto';
-type ApTab = 'dokumen' | 'kondisi' | 'diagnosa' | 'tindakan' | 'alkes';
+type ApTab = 'kondisi' | 'diagnosa' | 'tindakan' | 'alkes';
 type PTab = 'apotek' | 'rujukan';
 
 const inputCls = 'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-teal-400';
@@ -52,7 +53,7 @@ export default function EmrDetailPage() {
 
   const [mainTab, setMainTab] = useState<MainTab>('riwayat');
   const [soTab, setSoTab] = useState<SoTab>('anamnesa-umum');
-  const [apTab, setApTab] = useState<ApTab>('dokumen');
+  const [apTab, setApTab] = useState<ApTab>('kondisi');
   const [pTab, setPTab] = useState<PTab>('apotek');
   // Tanggal lokal hari ini (diisi setelah mount agar SSR & hidrasi identik).
   const [todayStr, setTodayStr] = useState('');
@@ -221,12 +222,59 @@ export default function EmrDetailPage() {
         paymentStatus: 'Belum Dibayar',
       });
       mutateGlobal((key) => typeof key === 'string' && (key.includes(STRAPI_ENDPOINTS.invoices) || key.includes(STRAPI_ENDPOINTS.registrations)));
-      setMainTab('riwayat');
+      // Tetap di tab aktif agar dokter bisa leluasa lanjut mengisi EMR — tanpa pindah tab/halaman.
       toast('Rekam medis selesai disimpan.');
     } finally {
       selesaiLock.current = false;
       setFinishing(false);
     }
+  };
+
+  // ---- Unggah foto klinis (before-after) ke Strapi → MinIO bucket `dpi` ----
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+
+  const uploadFoto = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const valid = Array.from(files).filter((f) => {
+      if (!f.type.startsWith('image/')) {
+        toast(`File ${f.name} bukan gambar — dilewati.`);
+        return false;
+      }
+      if (f.size > 10 * 1024 * 1024) {
+        toast(`File ${f.name} melebihi 10MB — dilewati.`);
+        return false;
+      }
+      return true;
+    });
+    if (valid.length === 0) return;
+    setUploadingFoto(true);
+    try {
+      // Pola HRIS: FormData `files` → POST /api/upload → pakai id/url respons.
+      const uploaded = await uploadMedia(valid);
+      const mapped: EmrPhoto[] = uploaded.map((m) => ({
+        id: m.id,
+        ...(m.documentId ? { documentId: m.documentId } : {}),
+        url: resolveMediaUrl(m.url),
+        name: m.name,
+      }));
+      const photos = [...draft.photos, ...mapped];
+      setDraft({ ...draft, photos, photoCount: photos.length });
+      toast(`${mapped.length} foto terunggah ke MinIO.`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Upload foto gagal.');
+    } finally {
+      setUploadingFoto(false);
+      if (fotoInputRef.current) fotoInputRef.current.value = '';
+    }
+  };
+
+  const hapusFoto = (id: number) => {
+    const target = draft.photos.find((p) => p.id === id);
+    const photos = draft.photos.filter((p) => p.id !== id);
+    setDraft({ ...draft, photos, photoCount: photos.length });
+    // Hapus file dari MinIO juga (best-effort — draft tetap konsisten).
+    if (target) deleteMedia(target.id).catch(() => {});
   };
 
   if (loading || !reg) {
@@ -579,29 +627,61 @@ export default function EmrDetailPage() {
                     </div>
                   ))}
                 </div>
-                <button type="button" className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-2 rounded-lg transition">
-                  <Plus className="w-3.5 h-3.5" /> Tambah Pemeriksaan Swab
-                </button>
               </div>
             )}
 
             {soTab === 'foto' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
-                <Upload className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                <h3 className="font-bold text-slate-700 text-sm">Unggah Foto Sebelum / Sesudah (Before–After)</h3>
-                <p className="text-xs text-slate-400 mt-1 mb-4">
-                  Dokumentasikan kondisi pasien sebelum dan sesudah tindakan (fitur Preview Before-After Dokter Pintar).
-                </p>
-                <div className="flex items-center justify-center gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...draft, photoCount: draft.photoCount + 1 })}
-                    className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Tambah Foto
-                  </button>
-                  <span className="text-xs text-slate-500">{draft.photoCount} foto terunggah</span>
+              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">
+                <div className="text-center py-2">
+                  <Upload className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                  <h3 className="font-bold text-slate-700 text-sm">Unggah Foto Sebelum / Sesudah (Before–After)</h3>
+                  <p className="text-xs text-slate-400 mt-1 mb-4">
+                    Dokumentasikan kondisi pasien sebelum dan sesudah tindakan. Foto tersimpan di MinIO
+                    dan ikut tersimpan saat klik Selesai.
+                  </p>
+                  <input
+                    ref={fotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    aria-label="Pilih foto klinis"
+                    onChange={(e) => uploadFoto(e.target.files)}
+                  />
+                  <div className="flex items-center justify-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => fotoInputRef.current?.click()}
+                      disabled={uploadingFoto}
+                      className="inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition disabled:opacity-60"
+                    >
+                      {uploadingFoto ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                      {uploadingFoto ? 'Mengunggah…' : 'Tambah Foto'}
+                    </button>
+                    <span className="text-xs text-slate-500">{draft.photos.length} foto terunggah</span>
+                  </div>
                 </div>
+                {draft.photos.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-slate-100 pt-4">
+                    {draft.photos.map((p, i) => (
+                      <div key={`${p.id}-${i}`} className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.url} alt={p.name} className="w-full h-32 object-cover" loading="lazy" />
+                        <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                          <span className="text-[11px] text-slate-500 truncate" title={p.name}>{i + 1}. {p.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => hapusFoto(p.id)}
+                            aria-label={`Hapus ${p.name}`}
+                            className="text-rose-500 hover:text-rose-700 shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -612,7 +692,6 @@ export default function EmrDetailPage() {
           <div className="space-y-4">
             <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {([
-                ['dokumen', 'Dokumen Medis'],
                 ['kondisi', 'Kondisi'],
                 ['diagnosa', 'Asesmen — Diagnosa'],
                 ['tindakan', 'Plan — Tindakan'],
@@ -621,31 +700,6 @@ export default function EmrDetailPage() {
                 <button key={key} onClick={() => setApTab(key)} className={subTabCls(apTab === key)}>{label}</button>
               ))}
             </div>
-
-            {apTab === 'dokumen' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-3">
-                <p className="text-xs text-slate-500 mb-2">Centang dokumen medis yang sudah dilengkapi (sesuai alur dokumen Dokter Pintar):</p>
-                {([
-                  ['generalConsent', 'Anamnesa — General Consent', FileSignature],
-                  ['asesmenAwal', 'Anamnesa — Asesmen Awal', ClipboardCheck],
-                  ['informedConsent', 'Treatment — Informed Consent', FileSignature],
-                  ['asesmenPraTindakan', 'Treatment — Asesmen Pra Tindakan', ClipboardCheck],
-                  ['surgicalSafety', 'Treatment — Surgical Safety', ShieldCheck],
-                ] as const).map(([key, label, Icon]) => (
-                  <label key={key} className="flex items-center gap-3 border border-slate-100 rounded-lg px-4 py-3 hover:bg-slate-50 cursor-pointer transition">
-                    <input
-                      type="checkbox"
-                      checked={draft.dokumen[key]}
-                      onChange={(e) => setDraft({ ...draft, dokumen: { ...draft.dokumen, [key]: e.target.checked } })}
-                      className="w-4 h-4 accent-teal-600"
-                    />
-                    <Icon className="w-4 h-4 text-slate-400" />
-                    <span className="text-sm text-slate-700 flex-1">{label}</span>
-                    {draft.dokumen[key] && <span className="text-xs text-emerald-600 font-semibold">Selesai</span>}
-                  </label>
-                ))}
-              </div>
-            )}
 
             {apTab === 'kondisi' && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 space-y-4">

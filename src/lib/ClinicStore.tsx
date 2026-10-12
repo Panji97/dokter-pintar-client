@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  Registration, Booking, EmrDocument, AnamnesaUmum, AnamnesaOdontogram, PemeriksaanUmum,
+  Registration, Booking, EmrDocument, EmrPhoto, AnamnesaUmum, AnamnesaOdontogram, PemeriksaanUmum,
   KondisiGigi, DiagnosaItem, TindakanItem, AlkesItem, OdontogramMap, ToothState,
   ToothCondition, ResepApotek, Invoice, Patient, Letter, Referral, Medicine,
   ApotekInvoice, InsuranceClaim, Room, Service, ServicePackage, ServiceDiscount, Staff,
@@ -12,7 +12,7 @@ import {
 import { STRAPI_ENDPOINTS } from './strapi-endpoints';
 import { getLocalStorage } from './storage';
 import { logout, getSession, handleUnauthorized } from './auth';
-import { STRAPI_SESSION_EVENT } from './strapi';
+import { STRAPI_SESSION_EVENT, resolveMediaUrl } from './strapi';
 
 /**
  * ClinicStore — SELURUH data langsung dari Strapi API (tanpa cache storage).
@@ -268,7 +268,8 @@ function emrScalars(doc: EmrDocument): Record<string, unknown> {
     dokumenInformedConsent: doc.dokumen.informedConsent,
     dokumenAsesmenPraTindakan: doc.dokumen.asesmenPraTindakan,
     dokumenSurgicalSafety: doc.dokumen.surgicalSafety,
-    photoCount: doc.photoCount,
+    // Sumber kebenaran jumlah foto = relasi media `photos` (MinIO).
+    photoCount: doc.photos.length > 0 ? doc.photos.length : doc.photoCount,
   };
 }
 
@@ -282,6 +283,31 @@ interface EmrKids {
   resepItems: ChildRow<ResepItemRow>[];
 }
 
+/** Ambil emr-documents + relasi media `photos` (url, name) untuk preview MinIO. */
+async function fetchEmrDocs(): Promise<EmrDocScalars[]> {
+  const faskesId = currentFaskesId();
+  const out: EmrDocScalars[] = [];
+  let page = 1;
+  for (;;) {
+    const params = new URLSearchParams({
+      'pagination[page]': String(page),
+      'pagination[pageSize]': '100',
+      sort: 'createdAt:DESC',
+      'filters[faskes][documentId][$eq]': faskesId,
+      'populate[photos][fields][0]': 'documentId',
+      'populate[photos][fields][1]': 'url',
+      'populate[photos][fields][2]': 'name',
+      'populate[photos][fields][3]': 'mime',
+    });
+    const res = await api<StrapiList>('GET', `${STRAPI_ENDPOINTS.emrDocuments}?${params.toString()}`);
+    out.push(...res.data.map(toModel<EmrDocScalars>));
+    const pageCount = res.meta?.pagination?.pageCount ?? 1;
+    if (page >= pageCount) break;
+    page += 1;
+  }
+  return out;
+}
+
 /** Rakit EmrDocument penuh dari kolom skalar + baris-baris anak. */
 function assembleEmr(docs: EmrDocScalars[], kids: EmrKids): Record<string, EmrDocument> {
   const byKondisi = groupKids(kids.kondisi);
@@ -293,6 +319,17 @@ function assembleEmr(docs: EmrDocScalars[], kids: EmrKids): Record<string, EmrDo
   const itemsByResep = groupKids(kids.resepItems);
   const emr: Record<string, EmrDocument> = {};
   for (const d of docs) {
+    const rawPhotos = Array.isArray(d.photos)
+      ? (d.photos as Array<{ id?: unknown; documentId?: unknown; url?: unknown; name?: unknown }>)
+      : [];
+    const photos: EmrPhoto[] = rawPhotos
+      .filter((p) => !!p && typeof p.url === 'string' && p.url.length > 0)
+      .map((p) => ({
+        id: typeof p.id === 'number' ? p.id : 0,
+        ...(typeof p.documentId === 'string' ? { documentId: p.documentId } : {}),
+        url: resolveMediaUrl(p.url as string),
+        name: typeof p.name === 'string' && p.name ? p.name : 'foto',
+      }));
     const reseps = (byResep.get(d.id) ?? []).sort((a, b) => a.urutan - b.urutan);
     const toResep = (jenis: 'apotek' | 'rujukan'): ResepApotek[] =>
       reseps
@@ -398,7 +435,8 @@ function assembleEmr(docs: EmrDocScalars[], kids: EmrKids): Record<string, EmrDo
         asesmenPraTindakan: d.dokumenAsesmenPraTindakan === true,
         surgicalSafety: d.dokumenSurgicalSafety === true,
       },
-      photoCount: typeof d.photoCount === 'number' ? d.photoCount : 0,
+      photoCount: photos.length > 0 ? photos.length : typeof d.photoCount === 'number' ? d.photoCount : 0,
+      photos,
     };
     emr[d.regId] = doc;
   }
@@ -546,6 +584,7 @@ function blankEmr(regId: string): EmrDocument {
     resepRujukan: [],
     dokumen: { generalConsent: false, asesmenAwal: false, informedConsent: false, asesmenPraTindakan: false, surgicalSafety: false },
     photoCount: 0,
+    photos: [],
   };
 }
 
@@ -724,7 +763,7 @@ async function loadModuleData(mod: string): Promise<Partial<ClinicState>> {
       const E2 = STRAPI_ENDPOINTS;
       const [emrDocs, kondisi, odonto, diagnosa, tindakan, alkes, reseps, resepItems] =
         await Promise.all([
-          fetchAll<EmrDocScalars>(E2.emrDocuments, 'createdAt:DESC').catch(() => []),
+          fetchEmrDocs().catch(() => []),
           fetchChildren<KondisiRow>(E2.emrKondisi, 'emr_document').catch(() => []),
           fetchChildren<OdontoRow>(E2.emrOdontogram, 'emr_document').catch(() => []),
           fetchChildren<DiagnosaRow>(E2.emrDiagnosa, 'emr_document').catch(() => []),
@@ -967,13 +1006,17 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       const patientDocId = state.registrations.find((r) => r.id === regId)?.patientId;
       const links: Record<string, string> = { registration: regId };
       if (patientDocId) links.patient = patientDocId;
+      // Relasi media `photos` (Strapi v5: documentId file, fallback id numerik).
+      const photoLinks = doc.photos
+        .map((p) => p.documentId ?? p.id)
+        .filter((v) => v !== 0 && v !== '');
       let docId = existing?.id;
       if (docId) {
         // Kolom skalar: satu PUT ke baris emr-documents.
-        await api('PUT', `${STRAPI_ENDPOINTS.emrDocuments}/${docId}`, { data: { ...emrScalars(doc), ...links } });
+        await api('PUT', `${STRAPI_ENDPOINTS.emrDocuments}/${docId}`, { data: { ...emrScalars(doc), photos: photoLinks, ...links } });
       } else {
         const res = await api<{ data: StrapiEntity }>(
-          'POST', STRAPI_ENDPOINTS.emrDocuments, { data: { ...emrScalars(doc), ...links, faskes: faskesId } },
+          'POST', STRAPI_ENDPOINTS.emrDocuments, { data: { ...emrScalars(doc), photos: photoLinks, ...links, faskes: faskesId } },
         );
         docId = res.data.documentId;
       }

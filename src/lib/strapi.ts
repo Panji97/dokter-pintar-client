@@ -310,8 +310,24 @@ export function logoutStrapi() {
   if (typeof window !== 'undefined') window.location.href = '/login';
 }
 
+/** File media Strapi (tersimpan di MinIO bucket `dpi` bila provider aws-s3 aktif). */
+export interface StrapiMedia {
+  id: number;
+  documentId: string;
+  url: string;
+  name: string;
+  mime: string;
+}
+
+/** URL absolut file media — MinIO public URL sudah absolut, lokal Strapi relatif. */
+export function resolveMediaUrl(url: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${baseUrl()}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 /** Upload file ke Strapi POST /api/upload (FormData, tanpa Content-Type manual). */
-export async function uploadToStrapi(files: File | File[]): Promise<number[]> {
+export async function uploadMedia(files: File | File[]): Promise<StrapiMedia[]> {
   const jwt = getLocalStorage('jwt');
   const formData = new FormData();
   (Array.isArray(files) ? files : [files]).forEach((f) => formData.append('files', f));
@@ -331,5 +347,39 @@ export async function uploadToStrapi(files: File | File[]): Promise<number[]> {
   }
   const media = await res.json();
   if (!res.ok) throw new Error(media?.error?.message || 'Upload gagal.');
-  return (Array.isArray(media) ? media : [media]).map((m: { id: number }) => m.id);
+  return (Array.isArray(media) ? media : [media]).map(
+    (m: { id: number; documentId: string; url: string; name: string; mime: string }) => ({
+      id: m.id,
+      documentId: m.documentId,
+      url: m.url,
+      name: m.name,
+      mime: m.mime,
+    }),
+  );
+}
+
+/** Upload file ke Strapi POST /api/upload (FormData, tanpa Content-Type manual). */
+export async function uploadToStrapi(files: File | File[]): Promise<number[]> {
+  return (await uploadMedia(files)).map((m) => m.id);
+}
+
+/** Hapus file media Strapi DELETE /api/upload/files/:id (best-effort: 404 diabaikan). */
+export async function deleteMedia(id: number | string): Promise<void> {
+  const jwt = getLocalStorage('jwt');
+  const headers: Record<string, string> = {};
+  if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
+  const res = await fetch(`${baseUrl()}${STRAPI_ENDPOINTS.upload}/files/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error('Sesi kedaluwarsa. Silakan masuk kembali.');
+  }
+  if (!res.ok && res.status !== 404) {
+    const body = await parseBodySafe(res);
+    throw new Error(
+      (body as { error?: { message?: string } })?.error?.message || 'Hapus file gagal.',
+    );
+  }
 }

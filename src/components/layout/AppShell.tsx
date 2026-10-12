@@ -151,9 +151,9 @@ export function ShellProvider({
           </SheetContent>
         </Sheet>
 
-        {/* Toast sukses global */}
+        {/* Toast sukses global — atas di mobile, bawah di desktop */}
         {toasts.length > 0 && (
-          <div className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 sm:w-96 z-[100] space-y-2" role="status" aria-live="polite">
+          <div className="fixed top-4 inset-x-4 sm:top-auto sm:bottom-4 sm:inset-x-auto sm:right-4 sm:w-96 z-[100] space-y-2" role="status" aria-live="polite">
             {toasts.map((t) => (
               <div
                 key={t.id}

@@ -169,6 +169,14 @@ export interface ResepApotek {
   date?: string;
 }
 
+/** Foto klinis EMR — file media Strapi (MinIO bucket `dpi`), tampil before-after. */
+export interface EmrPhoto {
+  id: number;
+  documentId?: string;
+  url: string;
+  name: string;
+}
+
 export interface EmrDocument {
   regId: string;
   anamnesaUmum: AnamnesaUmum;
@@ -190,6 +198,8 @@ export interface EmrDocument {
     surgicalSafety: boolean;
   };
   photoCount: number;
+  /** Foto klinis (before-after) — relasi media `photos` emr-document. */
+  photos: EmrPhoto[];
 }
 
 /* ============ BILLING ============ */
