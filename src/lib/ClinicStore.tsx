@@ -190,10 +190,11 @@ function groupKids<T>(rows: ChildRow<T>[]): Map<string, T[]> {
 }
 
 /** Hapus semua baris anak milik satu induk (dipakai sebelum tulis ulang). */
-async function clearChildren(endpoint: string, parentAttr: string, parentDocId: string) {
+async function clearChildren(endpoint: string, parentAttr: string, parentDocId: string, faskesId: string) {
   const params = new URLSearchParams({
     'pagination[pageSize]': '100',
     [`filters[${parentAttr}][documentId][$eq]`]: parentDocId,
+    'filters[faskes][documentId][$eq]': faskesId,
   });
   const res = await api<StrapiList>('GET', `${endpoint}?${params.toString()}`).catch(() => null);
   const rows = res?.data ?? [];
@@ -455,17 +456,17 @@ function assembleEmr(docs: EmrDocScalars[], kids: EmrKids): Record<string, EmrDo
 async function saveEmrChildren(docId: string, faskesId: string, doc: EmrDocument) {
   const E = STRAPI_ENDPOINTS;
   await Promise.all([
-    clearChildren(E.emrKondisi, 'emr_document', docId),
-    clearChildren(E.emrOdontogram, 'emr_document', docId),
-    clearChildren(E.emrDiagnosa, 'emr_document', docId),
-    clearChildren(E.emrTindakan, 'emr_document', docId),
-    clearChildren(E.emrAlkes, 'emr_document', docId),
+    clearChildren(E.emrKondisi, 'emr_document', docId, faskesId),
+    clearChildren(E.emrOdontogram, 'emr_document', docId, faskesId),
+    clearChildren(E.emrDiagnosa, 'emr_document', docId, faskesId),
+    clearChildren(E.emrTindakan, 'emr_document', docId, faskesId),
+    clearChildren(E.emrAlkes, 'emr_document', docId, faskesId),
   ]);
   // Resep: hapus item tiap resep lama dulu (tanpa cascade), lalu resepnya.
   const oldReseps = await api<StrapiList>('GET',
-    `${E.emrResep}?pagination[pageSize]=100&filters[emr_document][documentId][$eq]=${docId}`).catch(() => null);
+    `${E.emrResep}?pagination[pageSize]=100&filters[emr_document][documentId][$eq]=${docId}&filters[faskes][documentId][$eq]=${faskesId}`).catch(() => null);
   for (const r of oldReseps?.data ?? []) {
-    await clearChildren(E.emrResepItem, 'resep', r.documentId);
+    await clearChildren(E.emrResepItem, 'resep', r.documentId, faskesId);
     await api('DELETE', `${E.emrResep}/${r.documentId}`).catch(() => null);
   }
   // Buat baru — tiap tabel punya endpoint sendiri (tanpa JSON).

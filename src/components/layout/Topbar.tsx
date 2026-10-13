@@ -10,6 +10,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { useClinicStore, fmtRupiah } from '@/lib/ClinicStore';
 import { useFetch } from '@/lib/strapi';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
+import { getSession } from '@/lib/auth';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -48,13 +49,17 @@ export function Topbar({ title, subtitle, showBrand = false }: TopbarProps) {
   const pathname = usePathname();
   const { state } = useClinicStore();
 
+  const faskesId = typeof window !== 'undefined' ? getSession()?.faskes?.documentId ?? '' : '';
+  const faskesFilter = { faskes: { documentId: { $eq: faskesId } } };
   const { data: regsRes } = useFetch(STRAPI_ENDPOINTS.registrations, {
     pagination: { pageSize: 100 },
     sort: 'regDate:DESC',
+    filters: faskesFilter,
   });
   const { data: invsRes } = useFetch(STRAPI_ENDPOINTS.invoices, {
     pagination: { pageSize: 100 },
     sort: 'createdAt:DESC',
+    filters: faskesFilter,
   });
 
   const [q, setQ] = useState('');

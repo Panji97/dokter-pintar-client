@@ -13,6 +13,7 @@ import {
 import { useShell } from "./AppShell";
 import { useFetch } from "@/lib/strapi";
 import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
+import { getSession } from "@/lib/auth";
 import { fmtDate } from "@/lib/ClinicStore";
 
 /** Tanggal lokal YYYY-MM-DD (hindari bug UTC: toISOString bisa mundur 1 hari di WIB). */
@@ -42,17 +43,22 @@ export function QueueSidebar({ bare = false }: { bare?: boolean }) {
   const router = useRouter();
   const { setQueueSheetOpen } = useShell();
 
+  const faskesId = typeof window !== 'undefined' ? getSession()?.faskes?.documentId ?? '' : '';
+  const faskesFilter = { faskes: { documentId: { $eq: faskesId } } };
   const { data: roomsRes } = useFetch(STRAPI_ENDPOINTS.rooms, {
     pagination: { pageSize: 100 },
     sort: "createdAt:ASC",
+    filters: faskesFilter,
   });
   const { data: regsRes } = useFetch(STRAPI_ENDPOINTS.registrations, {
     pagination: { pageSize: 100 },
     sort: "regDate:DESC",
+    filters: faskesFilter,
   });
   const { data: invsRes } = useFetch(STRAPI_ENDPOINTS.invoices, {
     pagination: { pageSize: 100 },
     sort: "createdAt:DESC",
+    filters: faskesFilter,
   });
 
   const openEmr = (regId: string) => {

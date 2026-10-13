@@ -356,7 +356,6 @@ export interface PatientGroupItem {
 export interface Room {
   id: string;
   name: string;
-  satusehat?: boolean;
 }
 
 export interface Service {

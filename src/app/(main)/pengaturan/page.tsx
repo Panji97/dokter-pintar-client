@@ -18,14 +18,14 @@ import {
 type MainTab = 'sistem' | 'eksternal';
 type SysTab = 'pelayanan' | 'jadwal' | 'pegawai' | 'faskes' | 'akun';
 type ServiceTab = 'poli' | 'pelayanan' | 'paket' | 'diskon';
-type ExtTab = 'satusehat' | 'bpjs' | 'fonnte';
+type ExtTab = 'bpjs' | 'fonnte';
 
 export default function PengaturanPage() {
   const { state, ensureModule, addRoom, removeRoom, addStaff, toggleStaffActive } = useClinicStore();
   const [mainTab, setMainTab] = useState<MainTab>('sistem');
   const [sysTab, setSysTab] = useState<SysTab>('pelayanan');
   const [svcTab, setSvcTab] = useState<ServiceTab>('poli');
-  const [extTab, setExtTab] = useState<ExtTab>('satusehat');
+  const [extTab, setExtTab] = useState<ExtTab>('bpjs');
   const [saved, setSaved] = useState(false);
   const [newRoom, setNewRoom] = useState('');
   const [newStaff, setNewStaff] = useState({ name: '', role: '', room: 'Poli Gigi & Mulut' });
@@ -43,12 +43,6 @@ export default function PengaturanPage() {
     if (!ok) return;
     removeRoom(id);
   };
-
-  // SATUSEHAT
-  const [ssId, setSsId] = useState('11000030001');
-  const [ssClientKey, setSsClientKey] = useState('');
-  const [ssSecret, setSsSecret] = useState('');
-  const [ssOrgId, setSsOrgId] = useState('');
 
   const flash = () => {
     setSaved(true);
@@ -140,9 +134,6 @@ export default function PengaturanPage() {
                         <div key={r.id} className="px-4 py-3 flex items-center gap-2">
                           <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">
                             {r.name}
-                            {r.satusehat && (
-                              <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 align-middle">SATUSEHAT</span>
-                            )}
                           </span>
                           <button onClick={() => removePoli(r.id, r.name)} aria-label="Hapus poli" className="text-rose-500 hover:text-rose-700 active:text-rose-800 p-1.5 shrink-0">
                             <Trash2 className="w-4 h-4" />
@@ -162,9 +153,6 @@ export default function PengaturanPage() {
                           <tr key={r.id} className="hover:bg-slate-50">
                             <td className="px-4 py-3 text-slate-700">
                               {r.name}
-                              {r.satusehat && (
-                                <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 align-middle">SATUSEHAT</span>
-                              )}
                             </td>
                             <td className="px-4 py-3 text-right">
                               <button onClick={() => removePoli(r.id, r.name)} aria-label="Hapus poli" className="text-rose-500 hover:text-rose-700">
@@ -286,9 +274,8 @@ export default function PengaturanPage() {
         {/* ==================== PENGATURAN EKSTERNAL ==================== */}
         {mainTab === 'eksternal' && (
           <div className="space-y-4">
-            <div className="flex sm:grid sm:grid-cols-3 gap-2 w-full overflow-x-auto sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex sm:grid sm:grid-cols-2 gap-2 w-full overflow-x-auto sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {([
-                ['satusehat', 'SATUSEHAT'],
                 ['bpjs', 'BPJS Kesehatan'],
                 ['fonnte', 'Fonnte'],
               ] as const).map(([key, label]) => (
@@ -298,43 +285,6 @@ export default function PengaturanPage() {
                 </button>
               ))}
             </div>
-
-            {extTab === 'satusehat' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 space-y-4">
-                <h2 className="font-bold text-slate-800 text-sm flex items-center gap-2">ID SATUSEHAT</h2>
-                <p className="text-xs text-slate-500">
-                  Harap lengkapi data ID SATUSEHAT, Praktisi, Organisasi dan Lokasi. Setelah melengkapi, Anda dapat
-                  melakukan pendaftaran pasien SATUSEHAT.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Kode Fasyankes</label>
-                    <input value={ssId} onChange={(e) => setSsId(e.target.value)} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Organization ID</label>
-                    <input value={ssOrgId} onChange={(e) => setSsOrgId(e.target.value)} placeholder="cth. b15a7ae7-f366-4a84-8385-0b8196c05002" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Client Key</label>
-                    <input type="password" value={ssClientKey} onChange={(e) => setSsClientKey(e.target.value)} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Secret Key</label>
-                    <input type="password" value={ssSecret} onChange={(e) => setSsSecret(e.target.value)} className={inputCls} />
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-                  {['Praktisi', 'Organisasi', 'Lokasi', 'Data Agregasi', 'KYC'].map((s) => (
-                    <span key={s} className="px-3 py-1.5 bg-slate-100 rounded-full">{s} → belum dikonfigurasi</span>
-                  ))}
-                </div>
-                <button onClick={flash} className="inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium px-4 py-2.5 sm:py-2 rounded-lg shadow-sm transition w-full sm:w-auto">
-                  {saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                  {saved ? 'Tersimpan!' : 'Simpan Kredensial'}
-                </button>
-              </div>
-            )}
 
             {extTab === 'bpjs' && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 space-y-4">

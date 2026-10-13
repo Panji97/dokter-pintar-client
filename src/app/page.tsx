@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { LogoLink } from '@/components/layout/LogoLink';
 import {
   ScanLine, Smile, FileText, Pill, ReceiptText, BarChart3, FileDigit, FileOutput,
-  BadgeCheck, Monitor, Heart,
-  HeartPulse, ShieldCheck, Activity, Zap, Smartphone, Check, Quote, ChevronDown,
+  BadgeCheck, Monitor,   Heart, ShieldCheck, Activity, Zap, Smartphone, Check, Quote, ChevronDown,
   ArrowRight, MessageCircle, Mail, Phone, MapPin, Camera, Briefcase, Globe,
   Sparkles, Stethoscope, ClipboardPlus,
 } from 'lucide-react';
@@ -36,7 +35,6 @@ const whyItems = [
 ];
 
 const integrations = [
-  { icon: HeartPulse, label: 'SATUSEHAT' },
   { icon: ShieldCheck, label: 'BPJS Kesehatan' },
   { icon: Activity, label: 'PCare' },
   { icon: Zap, label: 'iCare' },
@@ -291,7 +289,7 @@ export default function LandingPage() {
             </div>
 
             <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2">
-              {['Coba gratis 14 hari', 'Tanpa instalasi khusus', 'Siap SATUSEHAT & BPJS'].map((t) => (
+              {['Coba gratis 14 hari', 'Tanpa instalasi khusus', 'Siap BPJS Kesehatan'].map((t) => (
                 <li key={t} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400">
                   <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                   {t}

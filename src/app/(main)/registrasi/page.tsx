@@ -8,6 +8,7 @@ import { useFetch } from "@/lib/strapi";
 import { useOptionGroup } from "@/lib/useOptions";
 import { useClinicStore } from "@/lib/ClinicStore";
 import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
+import { getSession } from "@/lib/auth";
 import { Patient, PatientGroup } from "@/types/clinic";
 import { EditPatientModal } from "@/components/pasien/EditPatientModal";
 import { Search, ClipboardPlus, ChevronLeft, ChevronRight, X, Pencil } from "lucide-react";
@@ -50,30 +51,36 @@ export default function PendaftaranPage() {
   const { queueOpen, setQueueOpen, setQueueSheetOpen, toast } = useShell();
   const { mutate: mutateGlobal } = useSWRConfig();
 
-  // SWR API calls langsung per modul (pola HRIS)
+  // SWR API calls langsung per modul (pola HRIS) — selalu sekat faskes sendiri.
+  const faskesId = typeof window !== 'undefined' ? getSession()?.faskes?.documentId ?? '' : '';
+  const faskesFilter = { faskes: { documentId: { $eq: faskesId } } };
   const { data: roomsRes, isLoading: loadingRooms } = useFetch(STRAPI_ENDPOINTS.rooms, {
     pagination: { pageSize: 100 },
     sort: "createdAt:ASC",
+    filters: faskesFilter,
   });
   const { data: groupsRes, isLoading: loadingGroups } = useFetch(STRAPI_ENDPOINTS.patientGroups, {
     pagination: { pageSize: 100 },
     sort: "createdAt:ASC",
+    filters: faskesFilter,
   });
   const { data: servicesRes, isLoading: loadingServices } = useFetch(STRAPI_ENDPOINTS.services, {
     pagination: { pageSize: 100 },
     sort: "createdAt:ASC",
+    filters: faskesFilter,
   });
   const { data: staffRes, isLoading: loadingStaff } = useFetch(STRAPI_ENDPOINTS.staff, {
     pagination: { pageSize: 100 },
     sort: "createdAt:ASC",
+    filters: faskesFilter,
   });
   const { data: patientsRes, isLoading: loadingPatients, mutate: mutatePatients } = useFetch(
     STRAPI_ENDPOINTS.patients,
-    { pagination: { pageSize: 100 }, sort: "createdAt:DESC" }
+    { pagination: { pageSize: 100 }, sort: "createdAt:DESC", filters: faskesFilter }
   );
   const { data: schedulesRes, isLoading: loadingSchedules } = useFetch(
     STRAPI_ENDPOINTS.staffSchedules,
-    { pagination: { pageSize: 200 }, sort: "createdAt:ASC" }
+    { pagination: { pageSize: 200 }, sort: "createdAt:ASC", filters: faskesFilter }
   );
 
   // Opsi dropdown Title & Jenis Kelamin — wajib dari API (ms-options).
