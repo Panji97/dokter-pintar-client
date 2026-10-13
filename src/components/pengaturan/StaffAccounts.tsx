@@ -1,17 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import { useFetch, usePost } from '@/lib/strapi';
-import { useOptionGroup } from '@/lib/useOptions';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { getSession } from '@/lib/auth';
+
+interface StaffRole {
+  id: number;
+  documentId: string;
+  name: string;
+  type: string;
+}
 
 interface StaffUser {
   documentId: string;
   username: string;
   email: string;
-  appRole: string;
+  role: StaffRole | null;
 }
 
 const ADMIN_ROLES = ['Administrator', 'Admin Faskes'];
@@ -22,13 +28,18 @@ export function StaffAccounts() {
 
   const { data, mutate, isLoading } = useFetch(STRAPI_ENDPOINTS.faskesStaff);
   const { postData: invite, loading: inviting } = usePost(STRAPI_ENDPOINTS.faskesStaff);
-  // Peran akun — wajib dari API (ms-options), tidak boleh hardcode.
-  const { items: appRoles, isLoading: loadingRoles } = useOptionGroup('app-role');
+  // Peran dari role bawaan Strapi (bisa diatur permission per-modul via Admin Panel > Roles).
+  const { data: rolesRes, isLoading: loadingRoles } = useFetch(STRAPI_ENDPOINTS.faskesRoles);
 
-  const [form, setForm] = useState({ name: '', email: '', password: '', appRole: '' });
+  const roles: StaffRole[] = useMemo(() => {
+    const rows = (rolesRes as { data?: StaffRole[] } | undefined)?.data ?? [];
+    return rows;
+  }, [rolesRes]);
+
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: '' });
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
-  const appRoleValue = form.appRole || appRoles[0]?.value || '';
+  const roleValue = form.role || roles[0]?.name || '';
 
   const users = ((data as { data?: StaffUser[] } | undefined)?.data ?? []) as StaffUser[];
 
@@ -36,19 +47,19 @@ export function StaffAccounts() {
     e.preventDefault();
     setError('');
     setOk('');
-    if (!appRoleValue) {
-      setError('Peran wajib dipilih (menunggu master peran dari API).');
+    if (!roleValue) {
+      setError('Peran wajib dipilih (menunggu daftar peran dari API).');
       return;
     }
     const result = await invite({
-      data: { name: form.name.trim().toUpperCase(), email: form.email.trim(), password: form.password, appRole: appRoleValue },
+      data: { name: form.name.trim().toUpperCase(), email: form.email.trim(), password: form.password, role: roleValue },
     });
     if (result?.error) {
       setError(result.error.message ?? 'Gagal mengundang staf.');
       return;
     }
     setOk(`Akun ${form.email.trim()} dibuat — staf bisa masuk dengan email & kata sandi itu.`);
-    setForm({ name: '', email: '', password: '', appRole: appRoles[0]?.value ?? '' });
+    setForm({ name: '', email: '', password: '', role: roles[0]?.name ?? '' });
     mutate();
   };
 
@@ -93,20 +104,21 @@ export function StaffAccounts() {
               <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Minimal 6 karakter" className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Peran</label>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Peran (role Strapi)</label>
               <select
-                value={appRoleValue}
-                onChange={(e) => setForm({ ...form, appRole: e.target.value })}
-                disabled={loadingRoles && appRoles.length === 0}
+                value={roleValue}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                disabled={loadingRoles && roles.length === 0}
                 className={inputCls}
               >
                 <option value="">
-                  {loadingRoles && appRoles.length === 0 ? 'Memuat...' : '— Pilih peran —'}
+                  {loadingRoles && roles.length === 0 ? 'Memuat...' : '— Pilih peran —'}
                 </option>
-                {appRoles.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
+                {roles.map((r) => (
+                  <option key={r.documentId || r.id} value={r.name}>{r.name}</option>
                 ))}
               </select>
+              <p className="text-[11px] text-slate-400 mt-1">Permission tiap peran diatur via Strapi Admin Panel &gt; Roles.</p>
             </div>
           </div>
           {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
@@ -137,7 +149,7 @@ export function StaffAccounts() {
                   <div className="text-[11px] text-slate-400 truncate">{u.email}</div>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 font-medium shrink-0">
-                  {u.appRole}
+                  {u.role?.name ?? '-'}
                 </span>
               </div>
             ))}

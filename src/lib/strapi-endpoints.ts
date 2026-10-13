@@ -59,6 +59,8 @@ export const STRAPI_ENDPOINTS = {
   // multi-tenant faskes (custom, pola HRIS approver/register)
   faskesRegister: '/api/faskes/register',
   faskesStaff: '/api/faskes/staff',
+  faskesRoles: '/api/faskes/roles',
+  faskesMe: '/api/faskes/me',
   faskesList: '/api/faskes-list',
 } as const;
 

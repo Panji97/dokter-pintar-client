@@ -3,7 +3,8 @@
  *
  * - Login: POST /api/auth/local, JWT disimpan ganda (localStorage + cookie)
  *   seperti hris-client-sakai, sesi app di localStorage 'dokter-pintar-session'.
- * - Role aplikasi dibaca dari field `appRole` user Strapi.
+ * - Role aplikasi dibaca dari relasi bawaan `role` user Strapi (bisa diatur
+ *   per-modul via Admin Panel > Roles).
  * - Lupa kata sandi: POST /api/auth/forgot-password lalu
  *   POST /api/auth/reset-password (kode dari email).
  * - Login Google tidak tersedia — memakai email + kata sandi.
@@ -142,7 +143,7 @@ export type AuthResult =
 
 interface StrapiAuthPayload {
   jwt?: string;
-  user?: { username?: string; email?: string; appRole?: string };
+  user?: { username?: string; email?: string; role?: { name?: string } };
   error?: { message?: string };
 }
 
@@ -155,11 +156,46 @@ async function strapiError(res: Response, fallback: string): Promise<string> {
   }
 }
 
-interface StrapiMe {
+interface FaskesMe {
   username?: string;
   email?: string;
-  appRole?: string;
+  role?: { name?: string } | null;
   faskes?: { documentId?: string; name?: string } | null;
+}
+
+interface FaskesMeResponse {
+  data?: FaskesMe;
+  error?: { message?: string };
+}
+
+/** Profil diri via endpoint custom (role bawaan ikut terkirim). */
+async function fetchFaskesMe(jwt: string, identifier?: string): Promise<FaskesMe | null> {
+  try {
+    const meRes = await fetch(`${baseUrl()}/api/faskes/me`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    if (meRes.ok) {
+      const body = (await meRes.json()) as FaskesMeResponse;
+      if (body.data?.faskes?.documentId) return body.data;
+    }
+  } catch {
+    /* lanjut ke fallback */
+  }
+  // Fallback: cari diri di daftar staf faskes (memuat role + faskes).
+  // Berguna bila server belum restart setelah update route /faskes/me.
+  try {
+    const staffRes = await fetch(`${baseUrl()}/api/faskes/staff`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    const staffBody = (await staffRes.json()) as { data?: FaskesMe[] };
+    if (!staffRes.ok || !Array.isArray(staffBody.data)) return null;
+    const want = (identifier ?? '').trim().toLowerCase();
+    const found =
+      staffBody.data.find((u) => u.email?.toLowerCase() === want) ?? staffBody.data[0] ?? null;
+    return found;
+  } catch {
+    return null;
+  }
 }
 
 /** Login dengan Email + kata sandi ke Strapi. */
@@ -184,12 +220,10 @@ export async function loginDetailed(
       return { ok: false, error: body?.error?.message || 'Email atau kata sandi salah.' };
     }
 
-    // Ambil profil lengkap (termasuk appRole + faskes).
-    const meRes = await fetch(`${baseUrl()}/api/users/me?populate=faskes`, {
-      headers: { Authorization: `Bearer ${body.jwt}` },
-    });
-    const me = (await meRes.json()) as StrapiMe;
-    if (!meRes.ok || !me.faskes?.documentId) {
+    // Ambil profil lengkap (role bawaan + faskes) via endpoint custom
+    // karena /api/users/me bawaan Strapi tidak mengembalikan relasi role.
+    const me = await fetchFaskesMe(body.jwt, identifier);
+    if (!me?.faskes?.documentId) {
       return { ok: false, error: 'Akun belum terikat ke faskes. Hubungi admin faskes.' };
     }
 
@@ -199,7 +233,7 @@ export async function loginDetailed(
 
     const name = me.username || body.user.username || identifier.trim();
     const email = me.email || body.user.email || identifier.trim();
-    const role = me.appRole || 'Pengguna';
+    const role = me.role?.name || body.user.role?.name || 'Pengguna';
     const faskes = { documentId: me.faskes.documentId, name: me.faskes.name ?? '' };
     return { ok: true, session: startSession(name, email, role, faskes) };
   } catch {
@@ -248,7 +282,7 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
       data?: {
         jwt?: string;
         faskes?: { documentId?: string; name?: string };
-        user?: { username?: string; email?: string; appRole?: string };
+        user?: { username?: string; email?: string; role?: { name?: string } };
       };
       error?: { message?: string };
     };
@@ -266,7 +300,7 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
       session: startSession(
         user.username || name,
         user.email || email,
-        user.appRole || 'Admin Faskes',
+        user.role?.name || 'Admin Faskes',
         { documentId: faskesId, name: faskesNameOut },
       ),
     };
@@ -332,23 +366,18 @@ export async function resetPassword(
     setLocalStorage('user', JSON.stringify(body.user));
     notifySessionChanged();
     let faskes: SessionFaskes | null = null;
-    try {
-      const meRes = await fetch(`${baseUrl()}/api/users/me?populate=faskes`, {
-        headers: { Authorization: `Bearer ${body.jwt}` },
-      });
-      const me = (await meRes.json()) as StrapiMe;
-      if (me.faskes?.documentId) {
-        faskes = { documentId: me.faskes.documentId, name: me.faskes.name ?? '' };
-      }
-    } catch {
-      /* abaikan — sesi tanpa faskes */
+    let roleName = body.user.role?.name || 'Pengguna';
+    const me = body.jwt ? await fetchFaskesMe(body.jwt) : null;
+    if (me?.faskes?.documentId) {
+      faskes = { documentId: me.faskes.documentId, name: me.faskes.name ?? '' };
     }
+    if (me?.role?.name) roleName = me.role.name;
     return {
       ok: true,
       session: startSession(
         body.user.username || '',
         body.user.email || '',
-        body.user.appRole || 'Pengguna',
+        roleName,
         faskes,
       ),
     };

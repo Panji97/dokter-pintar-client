@@ -288,7 +288,7 @@ export async function loginStrapi(identifier: string, password: string) {
   }
 
   const meQuery = qs.stringify(
-    { populate: { role: { fields: ['name'] } } },
+    { populate: { role: { fields: ['name'] }, faskes: { fields: ['name'] } } },
     { skipNulls: true, encodeValuesOnly: true },
   );
   const meResponse = await fetch(`${baseUrl()}${STRAPI_ENDPOINTS.usersMe}?${meQuery}`, {
