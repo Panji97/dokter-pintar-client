@@ -25,10 +25,11 @@ import {
 } from '@/types/clinic';
 import {
   Plus, Trash2, FileText, Upload, FileCheck, Loader2, X, ChevronLeft, ChevronRight,
-  History, Pencil, Printer,
+  Pencil, Printer,
 } from 'lucide-react';
 import { PrintPreview } from '@/components/print/PrintPreview';
 import { ResepDoc, ResumeDoc, useFaskesKop } from '@/components/print/documents';
+import { MedicineDropdown, ServiceDropdown } from '@/components/ui/entity-dropdowns';
 
 type MainTab = 'riwayat' | 'so' | 'ap' | 'p';
 type SoTab = 'anamnesa-umum' | 'anamnesa-odonto' | 'pemeriksaan' | 'foto';
@@ -494,7 +495,9 @@ export default function EmrDetailPage() {
         {mainTab === 'riwayat' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="px-5 py-4 border-b border-slate-100 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">Riwayat Medis Pasien</h2>
+              <h2 className="font-bold text-slate-800 uppercase text-sm tracking-wide">
+                Riwayat Medis Pasien ({state.registrations.filter((r) => r.patientId === reg.patientId).length})
+              </h2>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setShowResume(true)}
@@ -504,13 +507,9 @@ export default function EmrDetailPage() {
                 </button>
               {/* Pilih kunjungan pasien — form di bawah mengikuti pilihan ini */}
               <label className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2 text-xs font-medium text-slate-600">
-                <span className="inline-flex items-center gap-1.5 text-slate-500">
-                  <History className="w-3.5 h-3.5 shrink-0" />
-                  Kunjungan pasien ({state.registrations.filter((r) => r.patientId === reg.patientId).length})
-                </span>
                 <select
                   value={regId}
-                  aria-label="Pilih kunjungan pasien yang dibuka"
+                  aria-label="Pilih riwayat yang dibuka"
                   onChange={(e) => {
                     if (e.target.value === regId) return;
                     const target = state.registrations.find((r) => r.id === e.target.value);
@@ -1199,16 +1198,18 @@ export default function EmrDetailPage() {
                 <div className="grid grid-cols-2 md:grid-cols-[1fr_7rem_6rem_auto] gap-2.5 md:gap-3 items-end border-t border-slate-100 pt-4">
                   <div className="col-span-2 md:col-span-1 min-w-0">
                     <label className={labelCls}>Tindakan (Master)</label>
-                    <select
+                    <ServiceDropdown
                       value={newTindakan.code}
-                      onChange={(e) => {
-                        const svc = state.services.find((s) => s.code === e.target.value);
-                        setNewTindakan({ ...newTindakan, code: e.target.value, name: svc?.name ?? '', price: svc?.price ?? 0 });
+                      placeholder="Cari tindakan…"
+                      onChange={(code, raw) => {
+                        setNewTindakan({
+                          ...newTindakan,
+                          code,
+                          name: raw ? String(raw.name ?? '') : '',
+                          price: raw ? (typeof raw.price === 'number' ? raw.price : Number(raw.price) || 0) : 0,
+                        });
                       }}
-                      className={inputCls}
-                    >
-                      {state.services.map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
-                    </select>
+                    />
                   </div>
                   <div className="min-w-0">
                     <label className={labelCls}>Posisi Gigi</label>
@@ -1348,16 +1349,19 @@ export default function EmrDetailPage() {
                 <div className="grid grid-cols-[6rem_1fr] md:grid-cols-[1fr_6rem_auto] gap-2.5 md:gap-3 items-end border-t border-slate-100 pt-4">
                   <div className="col-span-2 md:col-span-1 min-w-0">
                     <label className={labelCls}>Alkes (Master)</label>
-                    <select
+                    <MedicineDropdown
                       value={newAlkes.code}
-                      onChange={(e) => {
-                        const med = state.medicines.find((m) => m.code === e.target.value);
-                        setNewAlkes({ ...newAlkes, code: e.target.value, name: med?.name ?? '', price: med?.price ?? 0 });
+                      valueField="code"
+                      placeholder="Cari alkes…"
+                      onChange={(code, raw) => {
+                        setNewAlkes({
+                          ...newAlkes,
+                          code,
+                          name: raw ? String(raw.name ?? '') : '',
+                          price: raw ? (typeof raw.price === 'number' ? raw.price : Number(raw.price) || 0) : 0,
+                        });
                       }}
-                      className={inputCls}
-                    >
-                      {state.medicines.map((m) => <option key={m.id} value={m.code}>{m.code} — {m.name}</option>)}
-                    </select>
+                    />
                   </div>
                   <div className="min-w-0">
                     <label className={labelCls}>Jml</label>
@@ -1411,7 +1415,6 @@ export default function EmrDetailPage() {
             {(['apotek', 'rujukan'] as const).map((section) => {
               const list = section === 'apotek' ? draft.resepApotek : draft.resepRujukan;
               const isApotek = section === 'apotek';
-              const meds = state.medicines;
               return pTab === section ? (
                 <div key={section} className="space-y-4">
                   {list.map((rp, ri) => (
@@ -1501,20 +1504,19 @@ export default function EmrDetailPage() {
                         </tbody>
                       </table></div>
                       <div className="mt-3 flex items-end gap-2">
-                        <select
-                          onChange={(e) => {
-                            const med = meds.find((m) => m.id === e.target.value);
-                            if (!med) return;
-                            const item = { id: `rx-${Date.now()}`, code: med.code, name: med.name, qty: 1, price: med.price };
-                            const updated = list.map((r2, i2) => (i2 === ri ? { ...r2, items: [...r2.items, item] } : r2));
-                            setDraft(isApotek ? { ...draft, resepApotek: updated } : { ...draft, resepRujukan: updated });
-                          }}
-                          defaultValue=""
-                          className={`${inputCls} max-w-xs`}
-                        >
-                          <option value="">+ Tambah obat dari master…</option>
-                          {meds.map((m) => <option key={m.id} value={m.id}>{m.code} — {m.name} (stok {m.stock})</option>)}
-                        </select>
+                        <div className="max-w-xs w-full">
+                          <MedicineDropdown
+                            value=""
+                            placeholder="+ Tambah obat dari master…"
+                            onChange={(_v, raw) => {
+                              if (!raw) return;
+                              const price = typeof raw.price === 'number' ? raw.price : Number(raw.price) || 0;
+                              const item = { id: `rx-${Date.now()}`, code: String(raw.code ?? ''), name: String(raw.name ?? ''), qty: 1, price };
+                              const updated = list.map((r2, i2) => (i2 === ri ? { ...r2, items: [...r2.items, item] } : r2));
+                              setDraft(isApotek ? { ...draft, resepApotek: updated } : { ...draft, resepRujukan: updated });
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}

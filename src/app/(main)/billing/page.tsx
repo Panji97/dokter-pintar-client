@@ -8,6 +8,7 @@ import { useOptionGroup } from '@/lib/useOptions';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
 import { PrintPreview } from '@/components/print/PrintPreview';
 import { InvoiceDoc, ApotekDoc, useFaskesKop } from '@/components/print/documents';
+import { MedicineDropdown } from '@/components/ui/entity-dropdowns';
 import type { Invoice, ApotekInvoice, InsuranceClaim } from '@/types/clinic';
 import {
   Search, Receipt, Pill, ShieldCheck, Plus, Printer, Banknote, QrCode, CreditCard, Wallet,
@@ -806,15 +807,18 @@ export default function TagihanPage() {
               </div>
               <div>
                 <label className={labelCls}>Obat</label>
-                <select
-                  onChange={(e) => {
-                    const med = state.medicines.find((m) => m.id === e.target.value);
-                    if (med) setObatForm({ ...obatForm, items: [{ id: med.id, name: med.name, qty: 1, price: med.price }] });
+                <MedicineDropdown
+                  value={obatForm.items[0]?.id ?? ''}
+                  placeholder="Cari obat…"
+                  onChange={(_v, raw) => {
+                    if (!raw) return;
+                    const price = typeof raw.price === 'number' ? raw.price : Number(raw.price) || 0;
+                    setObatForm({
+                      ...obatForm,
+                      items: [{ id: String(raw.documentId), name: String(raw.name ?? ''), qty: 1, price }],
+                    });
                   }}
-                  className={inputCls}
-                >
-                  {state.medicines.map((m) => <option key={m.id} value={m.id}>{m.name} — {fmtRupiah(m.price)}</option>)}
-                </select>
+                />
               </div>
               <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm flex justify-between">
                 <span className="text-slate-500">Total</span>

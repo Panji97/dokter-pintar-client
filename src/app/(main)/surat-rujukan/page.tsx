@@ -6,6 +6,7 @@ import { useClinicStore, fmtDate } from "@/lib/ClinicStore";
 import { useOptionGroup } from "@/lib/useOptions";
 import { PrintPreview } from "@/components/print/PrintPreview";
 import { SuratDoc, RujukanDoc, useFaskesKop } from "@/components/print/documents";
+import { PatientDropdown, DoctorDropdown } from "@/components/ui/entity-dropdowns";
 import type { Letter, Referral } from "@/types/clinic";
 import { FileText, FileOutput } from "lucide-react";
 
@@ -350,32 +351,17 @@ export default function SuratRujukanPage() {
             <div className="p-6 space-y-3">
               <div>
                 <label className={labelCls}>Pasien *</label>
-                <select
+                <PatientDropdown
                   value={patientId}
-                  onChange={(e) => setPatientId(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">— Pilih pasien —</option>
-                  {state.patients.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setPatientId(v)}
+                />
               </div>
               <div>
                 <label className={labelCls}>Dokter</label>
-                <select
+                <DoctorDropdown
                   value={doctor}
-                  onChange={(e) => setDoctor(e.target.value)}
-                  className={inputCls}
-                >
-                  {state.staff
-                    .filter((s) => s.role.startsWith("Dokter"))
-                    .map((s) => (
-                      <option key={s.id}>{s.name}</option>
-                    ))}
-                </select>
+                  onChange={(v) => setDoctor(v)}
+                />
               </div>
               {tab === "rujukan" && (
                 <div>

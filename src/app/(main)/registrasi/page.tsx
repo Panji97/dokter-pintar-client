@@ -11,6 +11,7 @@ import { STRAPI_ENDPOINTS } from "@/lib/strapi-endpoints";
 import { getSession } from "@/lib/auth";
 import { Patient, PatientGroup } from "@/types/clinic";
 import { EditPatientModal } from "@/components/pasien/EditPatientModal";
+import { DoctorDropdown, PatientGroupDropdown, RoomDropdown, ServiceDropdown } from "@/components/ui/entity-dropdowns";
 import { Search, ClipboardPlus, ChevronLeft, ChevronRight, X, Pencil } from "lucide-react";
 
 type Tab = "baru" | "lama";
@@ -54,26 +55,8 @@ export default function PendaftaranPage() {
   // SWR API calls langsung per modul (pola HRIS) — selalu sekat faskes sendiri.
   const faskesId = typeof window !== 'undefined' ? getSession()?.faskes?.documentId ?? '' : '';
   const faskesFilter = { faskes: { documentId: { $eq: faskesId } } };
-  const { data: roomsRes, isLoading: loadingRooms } = useFetch(STRAPI_ENDPOINTS.rooms, {
-    pagination: { pageSize: 100 },
-    sort: "createdAt:ASC",
-    filters: faskesFilter,
-  });
-  const { data: groupsRes, isLoading: loadingGroups } = useFetch(STRAPI_ENDPOINTS.patientGroups, {
-    pagination: { pageSize: 100 },
-    sort: "createdAt:ASC",
-    filters: faskesFilter,
-  });
-  const { data: servicesRes, isLoading: loadingServices } = useFetch(STRAPI_ENDPOINTS.services, {
-    pagination: { pageSize: 100 },
-    sort: "createdAt:ASC",
-    filters: faskesFilter,
-  });
-  const { data: staffRes, isLoading: loadingStaff } = useFetch(STRAPI_ENDPOINTS.staff, {
-    pagination: { pageSize: 100 },
-    sort: "createdAt:ASC",
-    filters: faskesFilter,
-  });
+  // Catatan: Grup/Poli/Pelayanan/Dokter dimuat lazy via dropdown search,
+  // jadi tidak di-fetch penuh di sini.
   const { data: patientsRes, isLoading: loadingPatients, mutate: mutatePatients } = useFetch(
     STRAPI_ENDPOINTS.patients,
     { pagination: { pageSize: 100 }, sort: "createdAt:DESC", filters: faskesFilter }
@@ -85,8 +68,6 @@ export default function PendaftaranPage() {
 
   // Opsi dropdown Jenis Kelamin — wajib dari API (ms-options).
   const { items: genderOptions, isLoading: loadingGenders } = useOptionGroup("gender");
-
-  const loading = loadingRooms || loadingGroups || loadingServices || loadingStaff || loadingSchedules || loadingGenders;
 
   // Tulis via ClinicStore agar state global ikut mutakhir (sumber kebenaran tunggal).
   const { addPatient, addRegistration } = useClinicStore();
@@ -135,30 +116,9 @@ export default function PendaftaranPage() {
     });
   };
 
-  const rooms = useMemo(() => {
-    const list = ((roomsRes?.data ?? []) as Array<{ name?: string }>);
-    return list.map((r) => r.name || "").filter(Boolean);
-  }, [roomsRes]);
-
-  const patientGroupOptions = useMemo(() => {
-    const list = ((groupsRes?.data ?? []) as Array<{ name?: string }>);
-    return list.map((g) => g.name || "").filter(Boolean);
-  }, [groupsRes]);
-
-  const serviceOptions = useMemo(() => {
-    const list = ((servicesRes?.data ?? []) as Array<{ name?: string }>);
-    return list.map((s) => s.name || "").filter(Boolean);
-  }, [servicesRes]);
-
-  const doctorOptions = useMemo(() => {
-    const list = ((staffRes?.data ?? []) as Array<{ id?: string | number; documentId?: string; name?: string; role?: string }>);
-    return list
-      .filter((s) => s.role === "Dokter Gigi" || s.role === "Dokter Umum")
-      .map((s) => ({
-        id: s.documentId || String(s.id ?? ""),
-        name: s.name || "",
-      }));
-  }, [staffRes]);
+  // Catatan: Grup/Poli/Pelayanan dimuat lazy via dropdown search
+  // (PatientGroupDropdown/RoomDropdown/ServiceDropdown), jadi tidak
+  // di-fetch penuh di sini.
 
   // Jadwal dokter terpilih — dari API staff-schedules, disaring per dokter.
   const scheduleOptions = useMemo(() => {
@@ -453,86 +413,50 @@ export default function PendaftaranPage() {
                       <label className={labelCls}>
                         Grup Pasien <span className="text-rose-500">*</span>
                       </label>
-                      <select
+                      <PatientGroupDropdown
                         value={form.group}
-                        onChange={(e) =>
-                          setForm({ ...form, group: e.target.value })
+                        onChange={(v) =>
+                          setForm({ ...form, group: v })
                         }
-                        className={inputCls}
-                      >
-                        <option value="">
-                          {loading && patientGroupOptions.length === 0
-                            ? "Memuat Grup Pasien..."
-                            : "Pilih Grup Pasien"}
-                        </option>
-                        {patientGroupOptions.map((g) => (
-                          <option key={g} value={g}>{g}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>
                         Poli <span className="text-rose-500">*</span>
                       </label>
-                      <select
+                      <RoomDropdown
                         value={form.room}
-                        onChange={(e) =>
-                          setForm({ ...form, room: e.target.value })
+                        onChange={(v) =>
+                          setForm({ ...form, room: v })
                         }
-                        className={inputCls}
-                      >
-                        <option value="">
-                          {loading && rooms.length === 0
-                            ? "Memuat Poli..."
-                            : "Pilih Poli"}
-                        </option>
-                        {rooms.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>
                         Pelayanan <span className="text-rose-500">*</span>
                       </label>
-                      <select
+                      <ServiceDropdown
                         value={form.serviceType}
-                        onChange={(e) =>
-                          setForm({ ...form, serviceType: e.target.value })
+                        valueField="name"
+                        hideCode
+                        placeholder="Pilih Pelayanan"
+                        onChange={(v) =>
+                          setForm({ ...form, serviceType: v })
                         }
-                        className={inputCls}
-                      >
-                        <option value="">
-                          {loading && serviceOptions.length === 0
-                            ? "Memuat Pelayanan..."
-                            : "Pilih Pelayanan"}
-                        </option>
-                        {serviceOptions.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>
                         Dokter Pemeriksa{" "}
                         <span className="text-rose-500">*</span>
                       </label>
-                      <select
+                      <DoctorDropdown
                         value={form.doctor}
-                        onChange={(e) =>
-                          setForm({ ...form, doctor: e.target.value, jadwal: "" })
+                        placeholder="Pilih Dokter"
+                        onChange={(v) =>
+                          setForm({ ...form, doctor: v, jadwal: "" })
                         }
-                        className={inputCls}
-                      >
-                        <option value="">
-                          {loading && doctorOptions.length === 0
-                            ? "Memuat Dokter..."
-                            : "Pilih Dokter"}
-                        </option>
-                        {doctorOptions.map((s) => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>
@@ -852,79 +776,43 @@ export default function PendaftaranPage() {
               </div>
               <div>
                 <label className={labelCls}>Grup Pasien</label>
-                <select
+                <PatientGroupDropdown
                   value={modalForm.group}
-                  onChange={(e) =>
-                    setModalForm({ ...modalForm, group: e.target.value })
+                  onChange={(v) =>
+                    setModalForm({ ...modalForm, group: v })
                   }
-                  className={inputCls}
-                >
-                  <option value="">
-                    {loading && patientGroupOptions.length === 0
-                      ? "Memuat Grup Pasien..."
-                      : "Pilih Grup Pasien"}
-                  </option>
-                  {patientGroupOptions.map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
+                />
               </div>
               <div>
                 <label className={labelCls}>Poli</label>
-                <select
+                <RoomDropdown
                   value={modalForm.room}
-                  onChange={(e) =>
-                    setModalForm({ ...modalForm, room: e.target.value })
+                  onChange={(v) =>
+                    setModalForm({ ...modalForm, room: v })
                   }
-                  className={inputCls}
-                >
-                  <option value="">
-                    {loading && rooms.length === 0
-                      ? "Memuat Poli..."
-                      : "Pilih Poli"}
-                  </option>
-                  {rooms.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
+                />
               </div>
               <div>
                 <label className={labelCls}>Pelayanan</label>
-                <select
+                <ServiceDropdown
                   value={modalForm.serviceType}
-                  onChange={(e) =>
-                    setModalForm({ ...modalForm, serviceType: e.target.value })
+                  valueField="name"
+                  hideCode
+                  placeholder="Pilih Pelayanan"
+                  onChange={(v) =>
+                    setModalForm({ ...modalForm, serviceType: v })
                   }
-                  className={inputCls}
-                >
-                  <option value="">
-                    {loading && serviceOptions.length === 0
-                      ? "Memuat Pelayanan..."
-                      : "Pilih Pelayanan"}
-                  </option>
-                  {serviceOptions.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                />
               </div>
               <div>
                 <label className={labelCls}>Dokter Pemeriksa</label>
-                <select
+                <DoctorDropdown
                   value={modalForm.doctor}
-                  onChange={(e) =>
-                    setModalForm({ ...modalForm, doctor: e.target.value })
+                  placeholder="Pilih Dokter"
+                  onChange={(v) =>
+                    setModalForm({ ...modalForm, doctor: v })
                   }
-                  className={inputCls}
-                >
-                  <option value="">
-                    {loading && doctorOptions.length === 0
-                      ? "Memuat Dokter..."
-                      : "Pilih Dokter"}
-                  </option>
-                  {doctorOptions.map((s) => (
-                    <option key={s.id} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
+                />
               </div>
             </div>
             <div className="flex gap-2 justify-end pt-1">
