@@ -72,7 +72,7 @@ function initialsOf(name: string): string {
 /**
  * Modal ubah data diri pasien — dipakai di Pendaftaran & pengisian Rekam Medis.
  * Isi field SAMA PERSIS dengan bagian Informasi Pribadi di form pasien baru
- * (Title, Nama Lengkap, Jenis Kelamin, Tgl. Lahir, Umur, Alamat Lengkap, NIK).
+ * (Nama Lengkap, Jenis Kelamin, Tgl. Lahir, Umur, Alamat Lengkap, NIK).
  * Mobile tampil sebagai bottom-sheet, desktop sebagai dialog tengah.
  */
 export function EditPatientModal({ patient, onClose, onSaved }: EditPatientModalProps) {
@@ -103,18 +103,15 @@ function EditPatientForm({
 }) {
   const { updatePatient, syncPatientName } = useClinicStore();
   const { toast } = useShell();
-  const { items: titleOptions, isLoading: loadingTitles } = useOptionGroup('title');
   const { items: genderOptions, isLoading: loadingGenders } = useOptionGroup('gender');
 
   const [form, setForm] = useState<{
-    title: string;
     name: string;
     gender: 'L' | 'P' | '';
     birthDate: string;
     address: string;
     nik: string;
   }>({
-    title: patient.title || '',
     name: patient.name || '',
     gender: patient.gender || '',
     birthDate: (patient.birthDate || '').slice(0, 10),
@@ -152,7 +149,6 @@ function EditPatientForm({
     setSaving(true);
     try {
       const updated = await updatePatient(patient.id, {
-        title: form.title || '',
         name: form.name.trim(),
         gender: form.gender as 'L' | 'P',
         birthDate: form.birthDate || '',
@@ -211,23 +207,7 @@ function EditPatientForm({
         {/* Isi — cermin bagian Informasi Pribadi form pasien */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div className="md:col-span-3">
-              <label className={labelCls}>Title</label>
-              <select
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                disabled={loadingTitles && titleOptions.length === 0}
-                className={inputCls}
-              >
-                <option value="">
-                  {loadingTitles && titleOptions.length === 0 ? 'Memuat...' : 'Pilih...'}
-                </option>
-                {titleOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="md:col-span-6">
+            <div className="md:col-span-9">
               <label className={labelCls}>
                 Nama Lengkap <span className="text-rose-500 dark:text-rose-400">*</span>
               </label>

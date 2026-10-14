@@ -38,7 +38,15 @@ export interface Patient {
   registeredAt: string;
 }
 
-export type PatientGroup = 'Umum' | 'BPJS Kesehatan' | 'Asuransi Swasta' | 'Member';
+export type PatientGroup =
+  | 'Umum'
+  | 'BPJS Kesehatan'
+  | 'Asuransi'
+  | 'Asuransi Swasta'
+  | 'Jaminan Perusahaan'
+  | 'Karyawan Faskes'
+  | 'Keluarga Karyawan'
+  | 'Member';
 
 export interface Registration {
   id: string;
@@ -217,7 +225,7 @@ export interface Invoice {
   medicineFee: number;
   discount: number;
   total: number;
-  paymentMethod?: 'Tunai' | 'QRIS' | 'Debit' | 'Transfer' | 'BPJS';
+  paymentMethod?: 'Tunai' | 'QRIS' | 'Debit' | 'Transfer' | 'Kredit' | 'BPJS';
   paymentStatus: 'Belum Dibayar' | 'Lunas';
   paidAt?: string;
 }

@@ -83,11 +83,10 @@ export default function PendaftaranPage() {
     { pagination: { pageSize: 200 }, sort: "createdAt:ASC", filters: faskesFilter }
   );
 
-  // Opsi dropdown Title & Jenis Kelamin — wajib dari API (ms-options).
-  const { items: titleOptions, isLoading: loadingTitles } = useOptionGroup("title");
+  // Opsi dropdown Jenis Kelamin — wajib dari API (ms-options).
   const { items: genderOptions, isLoading: loadingGenders } = useOptionGroup("gender");
 
-  const loading = loadingRooms || loadingGroups || loadingServices || loadingStaff || loadingSchedules || loadingTitles || loadingGenders;
+  const loading = loadingRooms || loadingGroups || loadingServices || loadingStaff || loadingSchedules || loadingGenders;
 
   // Tulis via ClinicStore agar state global ikut mutakhir (sumber kebenaran tunggal).
   const { addPatient, addRegistration } = useClinicStore();
@@ -110,7 +109,6 @@ export default function PendaftaranPage() {
 
   // form pasien baru
   const [form, setForm] = useState({
-    title: "",
     name: "",
     gender: "",
     birthDate: "",
@@ -266,7 +264,7 @@ export default function PendaftaranPage() {
     try {
       const created = await addPatient({
         name: form.name.trim(),
-        title: form.title || "",
+        title: "",
         nik: form.nik || "-",
         birthDate: form.birthDate || form.regDate,
         gender: form.gender as "L" | "P",
@@ -297,7 +295,6 @@ export default function PendaftaranPage() {
       );
       setForm((f) => ({
         ...f,
-        title: "",
         name: "",
         gender: "",
         birthDate: "",
@@ -573,24 +570,7 @@ export default function PendaftaranPage() {
                     Informasi Pribadi
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <div className="md:col-span-3">
-                      <label className={labelCls}>Title</label>
-                      <select
-                        value={form.title}
-                        onChange={(e) =>
-                          setForm({ ...form, title: e.target.value })
-                        }
-                        className={inputCls}
-                      >
-                        <option value="">
-                          {loadingTitles && titleOptions.length === 0 ? "Memuat..." : "Pilih..."}
-                        </option>
-                        {titleOptions.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="md:col-span-6">
+                    <div className="md:col-span-9">
                       <label htmlFor="patient-name" className={labelCls}>
                         Nama Lengkap <span className="text-rose-500">*</span>
                       </label>

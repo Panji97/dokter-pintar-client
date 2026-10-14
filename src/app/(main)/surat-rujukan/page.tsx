@@ -36,12 +36,15 @@ export default function SuratRujukanPage() {
 
   const submit = () => {
     if (!patient || !kind) return;
+    // doctor diinisialisasi sebelum daftar staf dimuat → fallback ke dokter pertama.
+    const doctorName =
+      doctor || state.staff.filter((s) => s.role.startsWith("Dokter"))[0]?.name || "";
     if (tab === "surat") {
       addLetter({
         kind: kind as never,
         patientName: patient.name,
         patientId: patient.id,
-        doctor,
+        doctor: doctorName,
         date: new Date().toISOString().slice(0, 10),
         notes,
       });
@@ -50,7 +53,7 @@ export default function SuratRujukanPage() {
         kind: kind as never,
         patientName: patient.name,
         patientId: patient.id,
-        doctor,
+        doctor: doctorName,
         destination: destination || "—",
         diagnosis: notes,
         date: new Date().toISOString().slice(0, 10),

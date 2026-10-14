@@ -140,6 +140,17 @@ export const toUpperCase = (s: string) => s.toUpperCase();
 export const upText = (v: unknown): string =>
   typeof v === 'string' ? v.trim().toUpperCase() : v == null ? '' : String(v).trim().toUpperCase();
 
+/**
+ * Petakan nilai gender dari ms-options ke enum API patient.gender ("L"/"P").
+ * Nilai opsi di DB berupa label ("Laki-laki"/"Perempuan"), sedangkan kolom
+ * Strapi hanya menerima kode — tanpa pemetaan ini semua registrasi gagal 400.
+ */
+export const toGenderCode = (v: unknown): string => {
+  const t = String(v ?? '').trim().toUpperCase();
+  if (!t) return '';
+  return t.startsWith('P') ? 'P' : 'L';
+};
+
 /* ============================================================
  * Persistensi relasional (tanpa kolom JSON): tiap baris anak punya
  * tabel/endpoint sendiri, kolom skalar tersimpan per kolom.
@@ -949,6 +960,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
         name: upText(p.name),
         title: p.title ? upText(p.title) : p.title,
         address: upText(p.address),
+        gender: toGenderCode(p.gender),
         registeredAt: new Date().toISOString().slice(0, 10),
         faskes: currentFaskesId(),
       },
@@ -971,6 +983,7 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
     if (typeof payload.name === 'string') payload.name = upText(payload.name);
     if (typeof payload.title === 'string') payload.title = upText(payload.title);
     if (typeof payload.address === 'string') payload.address = upText(payload.address);
+    if ('gender' in payload) payload.gender = toGenderCode(payload.gender);
     await api('PUT', `${STRAPI_ENDPOINTS.patients}/${id}`, { data: payload });
     let updated: Patient | null = null;
     setState((s) => ({
@@ -1009,7 +1022,9 @@ export function ClinicStoreProvider({ children }: { children: React.ReactNode })
       data: {
         ...rest,
         patientName: upText(rest.patientName),
-        group: upText(rest.group),
+        // Grup pasien adalah enum title-case ("Umum", "BPJS Kesehatan", ...)
+        // di tipe maupun Strapi — JANGAN di-upText (jadi "UMUM" → 400).
+        group: rest.group,
         serviceType: upText(rest.serviceType),
         room: upText(rest.room),
         doctor: upText(rest.doctor),

@@ -25,12 +25,17 @@ interface StrapiOptionList {
  * Sumber: GET /api/ms-options?filters[group]=<group>, urut `urutan`.
  */
 export function useOptionGroup(group: string) {
+  // Seed data memakai camelCase ("paymentMethod") sedangkan pemanggil memakai
+  // kebab-case ("payment-method") — cari kedua varian agar dropdown terisi
+  // apa pun konvensi seed-nya.
+  const camel = group.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase());
+  const variants = [...new Set([group, camel])];
   const { data, error, isLoading, mutate } = useFetch(
     STRAPI_ENDPOINTS.options,
     {
       sort: ['urutan:asc'],
       'pagination[pageSize]': 200,
-      'filters[group][$eq]': group,
+      filters: { $or: variants.map((v) => ({ group: { $eq: v } })) },
     },
     { revalidateOnFocus: false },
   );
