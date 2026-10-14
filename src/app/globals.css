@@ -235,13 +235,48 @@ select:not([multiple]):disabled {
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 
-/* Print styles for invoices */
+/* ============================================================
+ * CETAK DOKUMEN (tanpa tab baru) — hanya .print-area yang dicetak.
+ * PrintPreview me-render portal #dpi-print-portal + class
+ * body.dpi-printing saat dialog print dibuka.
+ * ============================================================ */
+.dpi-print-only {
+  display: none;
+}
+@page {
+  size: A4;
+  margin: 10mm;
+}
 @media print {
   aside, header, .no-print {
     display: none !important;
   }
   main {
     padding: 0 !important;
+  }
+  body.dpi-printing {
+    background: #fff !important;
+  }
+  /* Sembunyikan seluruh app, kecuali portal preview. */
+  body.dpi-printing > *:not(#dpi-print-portal) {
+    display: none !important;
+  }
+  body.dpi-printing #dpi-print-portal .dpi-no-print {
+    display: none !important;
+  }
+  body.dpi-printing #dpi-print-portal .dpi-print-only {
+    display: block !important;
+  }
+  body.dpi-printing #dpi-print-portal .print-area {
+    max-width: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+  /* Paksa warna kop & tabel tetap keluar di printer. */
+  body.dpi-printing #dpi-print-portal * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 

@@ -3,9 +3,12 @@
 import { useMemo, useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
+import { PrintPreview } from '@/components/print/PrintPreview';
+import { ResepDoc } from '@/components/print/documents';
+import type { Registration } from '@/types/clinic';
 import {
   Search, ClipboardCheck, Database, PackagePlus, PackageMinus, Boxes, SlidersHorizontal,
-  Undo2, AlertTriangle, CalendarClock, Plus, Check,
+  Undo2, AlertTriangle, CalendarClock, Plus, Check, Printer,
 } from 'lucide-react';
 
 type Tab = 'kajian' | 'master' | 'penerimaan' | 'pengeluaran' | 'stok' | 'penyesuaian' | 'retur';
@@ -22,6 +25,8 @@ export default function FarmasiPage() {
   const [search, setSearch] = useState('');
   const [stokSearch, setStokSearch] = useState('');
   const [saved, setSaved] = useState(false);
+  // Preview cetak resep (modal di tab yang sama — tanpa tab baru).
+  const [printResep, setPrintResep] = useState<{ reg: Registration; items: { name: string; qty: number }[] } | null>(null);
 
   // kajian resep: pasien dengan resep yang belum diproses
   const resepList = useMemo(() => {
@@ -112,9 +117,14 @@ export default function FarmasiPage() {
                   <div key={reg.id} className="px-4 py-3.5 space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-medium text-slate-800 truncate">{reg.patientName}</div>
-                      <button onClick={prosesResep} className="text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 active:bg-teal-100 px-2.5 py-2 rounded-lg transition shrink-0">
-                        Proses
-                      </button>
+                      <span className="inline-flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => setPrintResep({ reg, items: items.map((i) => ({ name: i.name, qty: i.qty })) })} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-2 rounded-lg transition">
+                          <Printer className="w-3 h-3" /> Cetak
+                        </button>
+                        <button onClick={prosesResep} className="text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 active:bg-teal-100 px-2.5 py-2 rounded-lg transition">
+                          Proses
+                        </button>
+                      </span>
                     </div>
                     <div className="text-[11px] text-slate-400">{date} · {time} · {reg.doctor}</div>
                     <div className="text-[11px] text-slate-500 truncate">{items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</div>
@@ -154,7 +164,10 @@ export default function FarmasiPage() {
                       <td className="px-4 py-3">
                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">Belum Selesai</span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <button onClick={() => setPrintResep({ reg, items: items.map((i) => ({ name: i.name, qty: i.qty })) })} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md transition mr-1.5">
+                          <Printer className="w-3 h-3" /> Cetak
+                        </button>
                         <button onClick={prosesResep} className="text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1.5 rounded-md transition">
                           Proses
                         </button>
@@ -713,6 +726,25 @@ export default function FarmasiPage() {
           </div>
         )}
       </main>
+
+      {/* Preview cetak resep kajian — modal di tab yang sama */}
+      <PrintPreview
+        open={printResep !== null}
+        title="Preview Salinan Resep"
+        docNo={printResep ? `${printResep.reg.patientName} · ${fmtDate(printResep.reg.regDate)}` : undefined}
+        onClose={() => setPrintResep(null)}
+      >
+        {printResep && (
+          <ResepDoc
+            resepNo={`No. ${printResep.reg.id.slice(0, 8).toUpperCase()}`}
+            patientName={printResep.reg.patientName}
+            doctor={printResep.reg.doctor}
+            date={fmtDate(printResep.reg.regDate)}
+            items={printResep.items}
+            copyLabel="Kajian Farmasi"
+          />
+        )}
+      </PrintPreview>
     </>
   );
 }

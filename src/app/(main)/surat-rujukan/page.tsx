@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { useClinicStore, fmtDate } from "@/lib/ClinicStore";
 import { useOptionGroup } from "@/lib/useOptions";
+import { PrintPreview } from "@/components/print/PrintPreview";
+import { SuratDoc, RujukanDoc, useFaskesKop } from "@/components/print/documents";
+import type { Letter, Referral } from "@/types/clinic";
 import { FileText, FileOutput } from "lucide-react";
 
 export default function SuratRujukanPage() {
@@ -16,6 +19,10 @@ export default function SuratRujukanPage() {
   const loadingKinds = tab === "surat" ? loadingLetterKinds : loadingReferralKinds;
   const [kind, setKind] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
+  // Preview cetak (modal di tab yang sama — tanpa tab baru).
+  const [printLetter, setPrintLetter] = useState<Letter | null>(null);
+  const [printReferral, setPrintReferral] = useState<Referral | null>(null);
+  const faskes = useFaskesKop();
 
   // form fields umum
   const [patientId, setPatientId] = useState("");
@@ -139,7 +146,7 @@ export default function SuratRujukanPage() {
                       <FileText className="w-3 h-3" /> {l.kind}
                     </span>
                     <button
-                      onClick={() => window.print()}
+                      onClick={() => setPrintLetter(l)}
                       className="text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 active:bg-teal-100 px-2.5 py-2 rounded-lg transition shrink-0"
                     >
                       Cetak
@@ -192,7 +199,7 @@ export default function SuratRujukanPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => window.print()}
+                          onClick={() => setPrintLetter(l)}
                           className="text-xs font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 px-2.5 py-1.5 rounded-md transition"
                         >
                           Cetak
@@ -236,7 +243,7 @@ export default function SuratRujukanPage() {
                         : "Faskes Lain"}
                     </span>
                     <button
-                      onClick={() => window.print()}
+                      onClick={() => setPrintReferral(r)}
                       className="text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 active:bg-blue-100 px-2.5 py-2 rounded-lg transition shrink-0"
                     >
                       Cetak
@@ -296,7 +303,7 @@ export default function SuratRujukanPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => window.print()}
+                          onClick={() => setPrintReferral(r)}
                           className="text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-md transition"
                         >
                           Cetak
@@ -418,6 +425,36 @@ export default function SuratRujukanPage() {
           </div>
         </div>
       )}
+
+      {/* Preview cetak surat & rujukan — modal di tab yang sama */}
+      <PrintPreview
+        open={printLetter !== null}
+        title={`Preview ${printLetter?.kind ?? 'Surat'}`}
+        docNo={printLetter ? `${printLetter.patientName} · ${fmtDate(printLetter.date)}` : undefined}
+        onClose={() => setPrintLetter(null)}
+      >
+        {printLetter && (
+          <SuratDoc
+            letter={printLetter}
+            patient={printLetter.patientId ? state.patients.find((p) => p.id === printLetter.patientId) : undefined}
+            faskes={faskes}
+          />
+        )}
+      </PrintPreview>
+      <PrintPreview
+        open={printReferral !== null}
+        title={`Preview ${printReferral?.kind ?? 'Rujukan'}`}
+        docNo={printReferral ? `${printReferral.patientName} → ${printReferral.destination}` : undefined}
+        onClose={() => setPrintReferral(null)}
+      >
+        {printReferral && (
+          <RujukanDoc
+            referral={printReferral}
+            patient={printReferral.patientId ? state.patients.find((p) => p.id === printReferral.patientId) : undefined}
+            faskes={faskes}
+          />
+        )}
+      </PrintPreview>
     </>
   );
 }

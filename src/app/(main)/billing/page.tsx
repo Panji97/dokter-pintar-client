@@ -6,6 +6,8 @@ import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
 import { useOptionGroup } from '@/lib/useOptions';
 import { STRAPI_ENDPOINTS } from '@/lib/strapi-endpoints';
+import { PrintPreview } from '@/components/print/PrintPreview';
+import { InvoiceDoc, ApotekDoc, useFaskesKop } from '@/components/print/documents';
 import type { Invoice, ApotekInvoice, InsuranceClaim } from '@/types/clinic';
 import {
   Search, Receipt, Pill, ShieldCheck, Plus, Printer, Banknote, QrCode, CreditCard, Wallet,
@@ -206,6 +208,10 @@ export default function TagihanPage() {
   }, [ensureModule]);
   const [search, setSearch] = useState('');
   const [paying, setPaying] = useState<string | null>(null);
+  // Preview cetak (modal di tab yang sama — tanpa tab baru).
+  const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null);
+  const [printApotek, setPrintApotek] = useState<ApotekInvoice | null>(null);
+  const faskes = useFaskesKop();
   // Rincian tagihan yang dibuka (klik baris/kartu) — tanpa tombol baru.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // Metode pembayaran — wajib dari API (ms-options), tidak boleh hardcode.
@@ -388,7 +394,7 @@ export default function TagihanPage() {
                         Bayar
                       </button>
                     ) : (
-                      <button onClick={(e) => { e.stopPropagation(); window.print(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-2 rounded-lg transition shrink-0">
+                      <button onClick={(e) => { e.stopPropagation(); setPrintInvoice(inv); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-2 rounded-lg transition shrink-0">
                         <Printer className="w-3 h-3" /> Cetak
                       </button>
                     )}
@@ -454,7 +460,7 @@ export default function TagihanPage() {
                           Bayar
                         </button>
                       ) : (
-                        <button onClick={(e) => { e.stopPropagation(); window.print(); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md transition">
+                        <button onClick={(e) => { e.stopPropagation(); setPrintInvoice(inv); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md transition">
                           <Printer className="w-3 h-3" /> Cetak
                         </button>
                       )}
@@ -526,6 +532,11 @@ export default function TagihanPage() {
                     <span className="text-[11px] text-slate-500 truncate">{a.items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</span>
                     <span className="font-bold text-slate-800 text-sm shrink-0">{fmtRupiah(a.total)}</span>
                   </div>
+                  <div className="flex justify-end pt-1">
+                    <button onClick={(e) => { e.stopPropagation(); setPrintApotek(a); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-2 rounded-lg transition shrink-0">
+                      <Printer className="w-3 h-3" /> Cetak Struk
+                    </button>
+                  </div>
                 </div>
                 {open && <RincianApotek inv={a} />}
                 </div>
@@ -545,6 +556,7 @@ export default function TagihanPage() {
                   <th className="px-4 py-3 font-semibold">Item</th>
                   <th className="px-4 py-3 font-semibold text-right">Total</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -573,10 +585,15 @@ export default function TagihanPage() {
                         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <button onClick={(e) => { e.stopPropagation(); setPrintApotek(a); }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md transition">
+                        <Printer className="w-3 h-3" /> Cetak
+                      </button>
+                    </td>
                   </tr>
                   {open && (
                     <tr className="bg-slate-50/50">
-                      <td colSpan={6} className="px-4 py-0">
+                      <td colSpan={7} className="px-4 py-0">
                         <RincianApotek inv={a} />
                       </td>
                     </tr>
@@ -832,6 +849,24 @@ export default function TagihanPage() {
           </div>
         </div>
       )}
+
+      {/* Preview cetak kwitansi & struk — modal di tab yang sama */}
+      <PrintPreview
+        open={printInvoice !== null}
+        title="Preview Kwitansi Pembayaran"
+        docNo={printInvoice ? `No. ${printInvoice.id.slice(0, 8).toUpperCase()} · ${printInvoice.patientName}` : undefined}
+        onClose={() => setPrintInvoice(null)}
+      >
+        {printInvoice && <InvoiceDoc invoice={printInvoice} faskes={faskes} />}
+      </PrintPreview>
+      <PrintPreview
+        open={printApotek !== null}
+        title="Preview Struk Apotek"
+        docNo={printApotek ? `No. ${printApotek.id.slice(0, 8).toUpperCase()} · ${printApotek.patientName}` : undefined}
+        onClose={() => setPrintApotek(null)}
+      >
+        {printApotek && <ApotekDoc apotek={printApotek} faskes={faskes} />}
+      </PrintPreview>
     </>
   );
 }

@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
 import { useClinicStore, fmtRupiah, fmtDate } from '@/lib/ClinicStore';
 import { useOptionGroup } from '@/lib/useOptions';
+import { PrintPreview } from '@/components/print/PrintPreview';
+import { LaporanDoc, useFaskesKop, type LaporanRow } from '@/components/print/documents';
 import { FileText, TrendingUp, Users, Activity, FileDown, Pill, Receipt } from 'lucide-react';
 
 type Tab = 'rekam-medis' | 'kunjungan' | 'transaksi';
@@ -17,6 +19,9 @@ export default function LaporanPage() {
   const activeCategory = category || reportCategories[0]?.value || '';
   const [from, setFrom] = useState(new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10));
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  // Preview cetak (modal di tab yang sama — tanpa tab baru).
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const faskes = useFaskesKop();
 
   const inRange = (d: string) => d >= from && d <= to;
 
@@ -75,7 +80,7 @@ export default function LaporanPage() {
             ))}
           </div>
           <button
-            onClick={() => window.print()}
+            onClick={() => setPreviewOpen(true)}
             className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-sm transition shrink-0 w-full lg:w-auto"
           >
             <FileDown className="w-4 h-4" />
@@ -391,6 +396,93 @@ export default function LaporanPage() {
           </div>
         )}
       </main>
+
+      {/* Preview cetak laporan — modal di tab yang sama */}
+      <LaporanPreview
+        tab={tab}
+        from={from}
+        to={to}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+      />
     </>
+  );
+}
+
+/** Rakit data dokumen sesuai tab aktif lalu tampilkan di PrintPreview. */
+function LaporanPreview({ tab, from, to, open, onClose }: {
+  tab: 'rekam-medis' | 'kunjungan' | 'transaksi';
+  from: string; to: string; open: boolean; onClose: () => void;
+}) {
+  const { state } = useClinicStore();
+  const faskes = useFaskesKop();
+  const periode = `${fmtDate(from)} – ${fmtDate(to)}`;
+  const inRange = (d: string) => d >= from && d <= to;
+
+  let variantTitle = '';
+  let stats: [string, string][] = [];
+  let columns: string[] = [];
+  let rows: LaporanRow[] = [];
+
+  if (tab === 'rekam-medis') {
+    const regs = state.registrations.filter((r) => inRange(r.regDate.slice(0, 10)));
+    variantTitle = 'Laporan Rekam Medis';
+    stats = [
+      ['Pendaftaran', String(regs.length)],
+      ['RME Tersimpan', String(Object.keys(state.emr).length)],
+      ['Periode', periode],
+    ];
+    columns = ['Tanggal', 'Pasien', 'Dokter', 'Diagnosa', 'Status'];
+    rows = regs.map((r) => {
+      const emr = state.emr[r.id];
+      return {
+        cells: [
+          fmtDate(r.regDate),
+          r.patientName,
+          r.doctor,
+          emr?.diagnosa.map((d) => d.icd10Code).join(', ') || '-',
+          emr ? 'Proses' : 'Pendaftaran',
+        ],
+      };
+    });
+  } else if (tab === 'kunjungan') {
+    const regs = state.registrations.filter((r) => inRange(r.regDate.slice(0, 10)));
+    variantTitle = 'Laporan Kunjungan';
+    stats = [
+      ['Total Kunjungan', String(regs.length)],
+      ['Pasien Unik', String(new Set(regs.map((r) => r.patientId)).size)],
+      ['Periode', periode],
+    ];
+    columns = ['Tanggal', 'Pasien', 'Grup', 'Poli', 'Dokter'];
+    rows = regs.map((r) => ({
+      cells: [fmtDate(r.regDate), r.patientName, r.group, r.room, r.doctor],
+    }));
+  } else {
+    const invoices = state.invoices.filter((i) => inRange(i.date));
+    const revenue = invoices.reduce((s, i) => s + i.total, 0);
+    const lunas = invoices.filter((i) => i.paymentStatus === 'Lunas').reduce((s, i) => s + i.total, 0);
+    variantTitle = 'Laporan Transaksi';
+    stats = [
+      ['Pendapatan', fmtRupiah(revenue)],
+      ['Terima (Lunas)', fmtRupiah(lunas)],
+      ['Transaksi', String(invoices.length)],
+    ];
+    columns = ['Tanggal', 'Pasien', 'Total', 'Status'];
+    rows = invoices.map((i) => ({
+      cells: [fmtDate(i.date), i.patientName, fmtRupiah(i.total), i.paymentStatus],
+    }));
+  }
+
+  return (
+    <PrintPreview open={open} title={`Preview ${variantTitle}`} docNo={periode} onClose={onClose}>
+      <LaporanDoc
+        variantTitle={variantTitle}
+        periode={periode}
+        stats={stats}
+        columns={columns}
+        rows={rows}
+        faskes={faskes}
+      />
+    </PrintPreview>
   );
 }
